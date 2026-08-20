@@ -39,13 +39,12 @@ jobs:
 
       - name: Deploy to Vercel (cloud build)
         if: steps.check.outputs.skip == 'false'
-        working-directory: apps/web
+        # Run from repo root — project Root Directory is already apps/web
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          # Write project link so the CLI targets the right project without interactive prompts.
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
           npx vercel@59.1.4 deploy --prod --yes --token="$VERCEL_TOKEN"
