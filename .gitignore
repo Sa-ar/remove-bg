@@ -13,3 +13,4 @@ apps/web/.vercel
 .vercel
 .cursor/
 *.onnx.deploy-secrets.env
+.deploy-info.md
