@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+.DS_Store
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+apps/web/.vercel
+.vercel
+.cursor/
+*.onnx.deploy-secrets.env
