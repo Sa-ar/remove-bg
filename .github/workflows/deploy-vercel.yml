@@ -1,7 +1,7 @@
 name: Deploy Web to Vercel
 
-# Prefer Vercel's GitHub integration for automatic deploys. This workflow is an
-# explicit CLI fallback when VERCEL_TOKEN + org/project IDs are configured.
+# Primary CD is Vercel Git integration (linked to Sa-ar/remove-bg, root apps/web).
+# This workflow is an optional explicit production deploy via the Vercel CLI.
 
 on:
   push:
@@ -29,7 +29,7 @@ jobs:
         run: |
           if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::VERCEL_* secrets not set — relying on Vercel Git integration (or run vercel --prod locally)."
+            echo "::notice::VERCEL_* secrets not set — Vercel Git integration handles deploys."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
@@ -37,19 +37,7 @@ jobs:
       - uses: actions/checkout@v4
         if: steps.check.outputs.skip == 'false'
 
-      - uses: actions/setup-node@v4
-        if: steps.check.outputs.skip == 'false'
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
-
-      - name: Install deps
-        if: steps.check.outputs.skip == 'false'
-        working-directory: apps/web
-        run: npm ci
-
-      - name: Pull Vercel env & deploy
+      - name: Deploy to Vercel (cloud build)
         if: steps.check.outputs.skip == 'false'
         working-directory: apps/web
         env:
@@ -57,6 +45,7 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-          npx vercel build --prod --token="$VERCEL_TOKEN"
-          npx vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+          # Write project link so the CLI targets the right project without interactive prompts.
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx vercel@59.1.4 deploy --prod --yes --token="$VERCEL_TOKEN"
