@@ -1,0 +1,61 @@
+name: Deploy API to Oracle
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - ".github/workflows/deploy-oracle.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-oracle
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: rsync apps/api → Oracle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require Oracle secrets
+        id: check
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+          ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+        run: |
+          if [ -z "$ORACLE_HOST" ] || [ -z "$ORACLE_USER" ] || [ -z "$ORACLE_SSH_KEY" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Missing ORACLE_HOST / ORACLE_USER / ORACLE_SSH_KEY — Oracle deploy skipped."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip == 'false'
+
+      - name: Deploy over SSH
+        if: steps.check.outputs.skip == 'false'
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+          ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+          ORACLE_APP_DIR: ${{ secrets.ORACLE_APP_DIR }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$ORACLE_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$ORACLE_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          REMOTE_DIR="${ORACLE_APP_DIR:-/opt/rembg/current}"
+          SSH="ssh -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes"
+          rsync -az --delete \
+            --exclude '__pycache__' --exclude '*.pyc' \
+            --exclude '.env' --exclude '.venv' \
+            -e "$SSH" apps/api/ "${ORACLE_USER}@${ORACLE_HOST}:${REMOTE_DIR}/"
+          $SSH "${ORACLE_USER}@${ORACLE_HOST}" '
+            set -e
+            /opt/rembg/bin/pip install --no-input -q -r /opt/rembg/current/requirements.txt
+            U2NET_HOME=/opt/rembg/models /opt/rembg/bin/python -c "from rembg import new_session; new_session(\"birefnet-general\")"
+            sudo systemctl restart rembg.service
+          '

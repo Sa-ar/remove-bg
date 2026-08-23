@@ -1,30 +1,38 @@
-title: Remove BG API
-emoji: ✂️
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
-license: mit
-short_description: High-quality BiRefNet background removal API
----
-
 # Remove BG API
 
 FastAPI + `rembg` (`birefnet-general`) background removal worker.
 
-## Secrets
+Deployed as a systemd service (`rembg.service`, uvicorn on `127.0.0.1:5000`)
+behind nginx on an Oracle Cloud VM. nginx terminates HTTPS and proxies to the
+app. See [`deploy.sh`](./deploy.sh).
 
-Set these in the Space settings:
+## Configuration
+
+Read from `/opt/rembg/current/.env` (systemd `EnvironmentFile`) on the server:
 
 - `API_KEYS` — comma-separated Bearer keys for other projects
-- `UI_TOKEN_SECRET` — shared with the Vercel web app (JWT for the UI)
-- `WEB_ORIGIN` — Vercel URL, e.g. `https://your-app.vercel.app`
+- `UI_TOKEN_SECRET` — shared with the Vercel web app (signs short-lived UI upload JWTs)
+- `WEB_ORIGIN` — Vercel URL allowed for CORS, e.g. `https://your-app.vercel.app`
+- `MODEL` — rembg model (default `birefnet-general`)
+- `EXTRA_CORS_ORIGINS` — optional, comma-separated extra origins
 
 ## Endpoints
 
-- `GET /v1/health`
-- `POST /v1/remove` — multipart `file` → PNG with alpha
+- `GET /v1/health` — `200 {status: ok}` when the model is loaded, `503 code=waking` while it loads
+- `POST /v1/remove` — multipart `file` → PNG with alpha; auth via `Authorization: Bearer <key|ui-jwt>`
 - Interactive docs: `/docs`
 
-Hardware: **CPU Basic** (16GB). Free Spaces sleep when idle; allow 120s client timeouts.
+## Deploy
+
+```bash
+./deploy.sh            # uses the `rembg` SSH host alias
+./deploy.sh user@host  # or an explicit target
+```
+
+CI can deploy automatically via `.github/workflows/deploy-oracle.yml` once the
+`ORACLE_HOST`, `ORACLE_USER`, and `ORACLE_SSH_KEY` GitHub Actions secrets are set.
+
+## Local
+
+From the repo root: `docker compose up --build` (see the top-level README).
+The included `Dockerfile` is also usable for container hosts that need port 7860.

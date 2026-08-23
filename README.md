@@ -4,7 +4,7 @@ High-quality background removal with a web UI and an HTTP API other projects can
 
 | Piece | Stack | Free deploy |
 | --- | --- | --- |
-| API | FastAPI + [rembg](https://github.com/danielgatis/rembg) BiRefNet | [Hugging Face Spaces](https://huggingface.co/docs/hub/spaces-sdks-docker) Docker (CPU Basic, 16GB) |
+| API | FastAPI + [rembg](https://github.com/danielgatis/rembg) BiRefNet | Always-on VM (Oracle Cloud), systemd + nginx |
 | UI | Next.js | [Vercel Hobby](https://vercel.com/docs/accounts/plans/hobby) |
 
 Uploads go **directly to the API** (not through Vercel) so 10MB+ photos work on the Hobby body limit.
@@ -57,19 +57,20 @@ curl -X POST "http://localhost:8000/v1/remove" \
 - Errors: `{ "error", "code", "hint" }`
 - OpenAPI: `/docs`
 
-**Free-tier cold start:** Spaces sleep when idle. First request can take 1–2 minutes. Client timeout ≥ 120s. `GET /v1/health` returns `503` with `code=waking` while the model loads. CPU inference after wake is typically 10–40s.
+**Cold start:** The VM stays on, so there is no idle sleep. After a deploy/restart the model takes ~10–20s to load; `GET /v1/health` returns `503` with `code=waking` until it is ready. Keep client timeouts ≥ 120s: CPU inference is typically 10–40s per image.
 
 ## Free deploy
 
-### 1. Hugging Face Space (API)
+### 1. API (Oracle Cloud VM)
 
-1. Create a **Docker** Space, hardware **CPU Basic** (2 vCPU / 16GB).
-2. Space must be **public** (auth is Bearer keys, not Space visibility).
-3. Point the Space at this repo with Dockerfile path `apps/api/Dockerfile`, or push the contents of `apps/api` (including `README.md` Spaces YAML).
-4. Secrets: `API_KEYS`, `UI_TOKEN_SECRET`, `WEB_ORIGIN` (set after Vercel URL is known).
-5. Confirm `GET https://<user>-<space>.hf.space/v1/health`.
+Provisioned once on an always-on VM: Python venv at `/opt/rembg`, code at `/opt/rembg/current`, model cache at `/opt/rembg/models`, systemd unit `rembg.service` (uvicorn on `127.0.0.1:5000`), nginx terminating HTTPS on `443` and proxying to it.
 
-The Dockerfile listens on **port 7860** and prefetches BiRefNet weights at build time.
+1. Set `/opt/rembg/current/.env`: `API_KEYS`, `UI_TOKEN_SECRET`, `WEB_ORIGIN` (the Vercel URL), `MODEL=birefnet-general`.
+2. Deploy from `apps/api`: `./deploy.sh` (rsync + install + model prefetch + restart).
+3. HTTPS: point a subdomain at the VM's IP, then `sudo certbot --nginx -d api.example.com`.
+4. Confirm `GET https://api.example.com/v1/health`.
+
+CPU inference on the VM is typically 10–40s per image.
 
 ### 2. Vercel (UI)
 
@@ -86,16 +87,17 @@ Workflows in `.github/workflows/`:
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
 | `ci.yml` | push/PR to `main` | Web lint+build, API compile check |
-| `deploy-space.yml` | push to `apps/api/**` or manual | Sync `apps/api` → HF Space |
+| `deploy-oracle.yml` | push to `apps/api/**` or manual | rsync `apps/api` → Oracle VM + restart service |
 | `deploy-vercel.yml` | push to `apps/web/**` or manual | CLI production deploy (optional) |
 
 **GitHub Actions secrets** (Settings → Secrets → Actions):
 
 | Secret | Used by | Notes |
 | --- | --- | --- |
-| `HF_TOKEN` | Space deploy | Hugging Face write token |
-| `HF_USERNAME` | Space deploy | e.g. your HF username |
-| `HF_SPACE` | Space deploy | Space name, e.g. `remove-bg` |
+| `ORACLE_HOST` | API deploy | VM public IP or host |
+| `ORACLE_USER` | API deploy | SSH user, e.g. `ubuntu` |
+| `ORACLE_SSH_KEY` | API deploy | Private key with access to the VM (enables CI deploy) |
+| `ORACLE_APP_DIR` | API deploy | Optional; defaults to `/opt/rembg/current` |
 | `VERCEL_TOKEN` | Optional Vercel CLI | From vercel.com/account/tokens |
 | `VERCEL_ORG_ID` | Optional Vercel CLI | From `.vercel/project.json` after `vercel link` |
 | `VERCEL_PROJECT_ID` | Optional Vercel CLI | Same |
