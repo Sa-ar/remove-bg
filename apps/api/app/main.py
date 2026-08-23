@@ -21,6 +21,9 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from app import db, keys
+from app.keys import Principal
+
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 logger = logging.getLogger("remove_bg")
@@ -122,8 +125,10 @@ def _load_model() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    await db.init_pool()
     await asyncio.to_thread(_load_model)
     yield
+    await db.close_pool()
 
 
 app = FastAPI(
@@ -161,9 +166,9 @@ def error_response(status: int, error: str, code: str, hint: str) -> JSONRespons
     )
 
 
-def verify_auth(
+async def verify_auth(
     authorization: Annotated[Optional[str], Header()] = None,
-) -> str:
+) -> Principal:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401,
@@ -183,29 +188,27 @@ def verify_auth(
                 "hint": "Provide a non-empty API key or UI token",
             },
         )
-    if token in API_KEYS:
-        return "api_key"
+    # 1) UI JWT (anonymous website)
     if UI_TOKEN_SECRET:
         try:
             payload = jwt.decode(token, UI_TOKEN_SECRET, algorithms=["HS256"])
-            if payload.get("purpose") != "ui-upload":
-                raise InvalidTokenError("wrong purpose")
-            return "ui_token"
-        except InvalidTokenError as exc:
-            raise HTTPException(
-                status_code=401,
-                detail={
-                    "error": "Invalid token",
-                    "code": "unauthorized",
-                    "hint": "Token expired or signature invalid. Request a new UI token or check API_KEYS.",
-                },
-            ) from exc
+            if payload.get("purpose") == "ui-upload":
+                return Principal("ui", keys.WEB_UI_PROJECT_ID)
+        except InvalidTokenError:
+            pass
+    # 2) legacy static keys
+    if token in API_KEYS:
+        return Principal("legacy", keys.LEGACY_PROJECT_ID)
+    # 3) DB-backed project key
+    principal = await keys.resolve_api_key(token)
+    if principal is not None:
+        return principal
     raise HTTPException(
         status_code=401,
         detail={
             "error": "Invalid API key",
             "code": "unauthorized",
-            "hint": "Check API_KEYS. UI tokens require UI_TOKEN_SECRET.",
+            "hint": "Check the key, or that it is not revoked. UI tokens require UI_TOKEN_SECRET.",
         },
     )
 
@@ -288,7 +291,7 @@ async def remove_bg(
     file: UploadFile = File(...),
     crop: bool = Form(False),
     model: str = Form(DEFAULT_MODEL),
-    _auth: str = Depends(verify_auth),
+    principal: Principal = Depends(verify_auth),
 ) -> Response:
     if not model_ready:
         return error_response(
