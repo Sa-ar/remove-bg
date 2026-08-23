@@ -15,7 +15,7 @@
 - Removal (`POST /v1/remove`) MUST NOT be slowed or broken by the keys/usage subsystem. Usage logging is fire-and-forget; DB outage never blocks inference.
 - API keys are stored only as SHA-256 hashes plus a short display prefix. Plaintext is shown exactly once, at creation.
 - Key format: `rmbg_` + `secrets.token_urlsafe(24)`.
-- Two reserved projects seeded at fixed UUIDs: `web-ui` = `00000000-0000-0000-0000-0000000000w1`-style constants defined in Task 1 and reused verbatim.
+- Two reserved projects seeded at fixed UUIDs, reused verbatim by API and DB: `web-ui` = `00000000-0000-0000-0000-000000000001`, `legacy` = `00000000-0000-0000-0000-000000000002`.
 - `DATABASE_URL` is a secret in both the Oracle `.env` and Vercel env; never committed.
 - Existing anonymous UI-JWT upload flow keeps working, attributed to the `web-ui` project.
 
@@ -44,7 +44,7 @@
 - Create: `db/README.md` (how to apply)
 
 **Interfaces:**
-- Produces: tables `projects`, `api_keys`, `usage_events`; seeded project UUIDs `WEB_UI_PROJECT_ID = '00000000-0000-0000-0000-000000web0001'`, `LEGACY_PROJECT_ID = '00000000-0000-0000-0000-0000000eba01'` (used verbatim by Tasks 3–7).
+- Produces: tables `projects`, `api_keys`, `usage_events`; seeded project UUIDs `WEB_UI_PROJECT_ID = '00000000-0000-0000-0000-000000000001'`, `LEGACY_PROJECT_ID = '00000000-0000-0000-0000-000000000002'` (used verbatim by Tasks 3–7).
 
 - [ ] **Step 1: Write the migration**
 
@@ -85,8 +85,8 @@ create index usage_events_project_time_idx on usage_events (project_id, created_
 create index usage_events_key_time_idx on usage_events (api_key_id, created_at);
 
 insert into projects (id, name) values
-  ('00000000-0000-0000-0000-000000web0001', 'web-ui'),
-  ('00000000-0000-0000-0000-0000000eba01', 'legacy')
+  ('00000000-0000-0000-0000-000000000001', 'web-ui'),
+  ('00000000-0000-0000-0000-000000000002', 'legacy')
 on conflict (id) do nothing;
 ```
 
@@ -268,8 +268,8 @@ from typing import Optional
 
 from app import db
 
-WEB_UI_PROJECT_ID = "00000000-0000-0000-0000-000000web0001"
-LEGACY_PROJECT_ID = "00000000-0000-0000-0000-0000000eba01"
+WEB_UI_PROJECT_ID = "00000000-0000-0000-0000-000000000001"
+LEGACY_PROJECT_ID = "00000000-0000-0000-0000-000000000002"
 CACHE_TTL = 45  # seconds
 
 _cache: dict[str, tuple[float, Optional["Principal"]]] = {}
