@@ -5,6 +5,11 @@ from app.keys import Principal
 
 logger = logging.getLogger("remove_bg.usage")
 
+# The event loop only holds a weak reference to a scheduled task, so we must
+# keep a strong reference around until it finishes or it can be garbage
+# collected mid-flight, silently dropping the usage event.
+_pending: set = set()
+
 
 async def _insert(project_id, api_key_id, model, bytes_in, bytes_out, duration_ms, status):
     pool = db.get_pool()
@@ -23,6 +28,8 @@ async def _insert(project_id, api_key_id, model, bytes_in, bytes_out, duration_m
 
 def record_usage(principal: Principal, *, model: str, bytes_in: int,
                  bytes_out: int, duration_ms: int, status: int) -> None:
-    asyncio.create_task(_insert(
+    task = asyncio.create_task(_insert(
         principal.project_id, principal.api_key_id, model,
         bytes_in, bytes_out, duration_ms, status))
+    _pending.add(task)
+    task.add_done_callback(_pending.discard)
