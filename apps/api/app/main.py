@@ -3,6 +3,7 @@ import io
 import logging
 import os
 import threading
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Optional
@@ -21,7 +22,7 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app import db, keys
+from app import db, keys, usage
 from app.keys import Principal
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -333,6 +334,7 @@ async def remove_bg(
             f"Max size is {MAX_BYTES // (1024 * 1024)}MB.",
         )
 
+    _t0 = time.monotonic()
     try:
         await asyncio.wait_for(inference_lock.acquire(), timeout=90.0)
     except TimeoutError:
@@ -356,6 +358,15 @@ async def remove_bg(
             )
     finally:
         inference_lock.release()
+
+    usage.record_usage(
+        principal,
+        model=model,
+        bytes_in=len(data),
+        bytes_out=len(png),
+        duration_ms=int((time.monotonic() - _t0) * 1000),
+        status=200,
+    )
 
     return Response(
         content=png,
