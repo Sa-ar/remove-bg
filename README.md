@@ -4,8 +4,8 @@ High-quality background removal with a web UI and an HTTP API other projects can
 
 | Piece | Stack | Free deploy |
 | --- | --- | --- |
-| API | FastAPI + [rembg](https://github.com/danielgatis/rembg) BiRefNet | Always-on VM (Oracle Cloud), systemd + nginx |
-| UI | Next.js | [Vercel Hobby](https://vercel.com/docs/accounts/plans/hobby) |
+| API | FastAPI + [rembg](https://github.com/danielgatis/rembg) | Oracle Always Free Ampere A1 → **https://api.rembg.site** |
+| UI | Next.js | [Vercel Hobby](https://vercel.com/docs/accounts/plans/hobby) → **https://remove-bg-five-topaz.vercel.app** |
 
 Uploads go **directly to the API** (not through Vercel) so 10MB+ photos work on the Hobby body limit.
 
@@ -42,6 +42,8 @@ npm run dev
 
 Use the **same** `UI_TOKEN_SECRET` in `apps/api/.env` and `apps/web/.env.local`.
 
+For the optional keys/usage dashboard, set `DATABASE_URL` (Neon) on both web and API and apply `db/migrations/0001_init.sql`.
+
 ## API usage
 
 ```bash
@@ -52,66 +54,46 @@ curl -X POST "http://localhost:8000/v1/remove" \
   -o removed.png
 ```
 
-- Auth: `Authorization: Bearer <key>` from `API_KEYS`, or a short-lived UI JWT
+- Auth: `Authorization: Bearer <key>` from `API_KEYS`, a short-lived UI JWT, or a DB-backed project key
 - Success: `image/png` with alpha
 - Errors: `{ "error", "code", "hint" }`
 - OpenAPI: `/docs`
 
-**Cold start:** The VM stays on, so there is no idle sleep. After a deploy/restart the model takes ~10–20s to load; `GET /v1/health` returns `503` with `code=waking` until it is ready. Keep client timeouts ≥ 120s: CPU inference is typically 10–40s per image.
+**Cold / first inference:** The Oracle VM stays on (no Space sleep). After a service restart the model loads into RAM; `GET /v1/health` returns `503` with `code=waking` until ready. Client timeout ≥ 120s. Warm CPU inference is typically a few seconds (`isnet-general-use`).
 
-## Free deploy
+## Production
 
-### 1. API (Oracle Cloud VM)
+- API: https://api.rembg.site — see [`docs/oracle-setup.md`](docs/oracle-setup.md)
+- UI: https://remove-bg-five-topaz.vercel.app
 
-Provisioned once on an always-on VM: Python venv at `/opt/rembg`, code at `/opt/rembg/current`, model cache at `/opt/rembg/models`, systemd unit `rembg.service` (uvicorn on `127.0.0.1:5000`), nginx terminating HTTPS on `443` and proxying to it.
-
-1. Set `/opt/rembg/current/.env`: `API_KEYS`, `UI_TOKEN_SECRET`, `WEB_ORIGIN` (the Vercel URL), `MODEL=birefnet-general`.
-2. Deploy from `apps/api`: `./deploy.sh` (rsync + install + model prefetch + restart).
-3. HTTPS: point a subdomain at the VM's IP, then `sudo certbot --nginx -d api.example.com`.
-4. Confirm `GET https://api.example.com/v1/health`.
-
-CPU inference on the VM is typically 10–40s per image.
-
-### 2. Vercel (UI)
-
-1. Import the GitHub repo; set root directory to `apps/web`.
-2. Env:
-   - `NEXT_PUBLIC_API_URL=https://<user>-<space>.hf.space`
-   - `UI_TOKEN_SECRET=` (same value as the Space)
-3. Deploy, then put the Vercel origin into Space `WEB_ORIGIN` and restart the Space if needed.
-
-### 3. CI/CD (GitHub Actions)
-
-Workflows in `.github/workflows/`:
+### CI/CD (GitHub Actions)
 
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
 | `ci.yml` | push/PR to `main` | Web lint+build, API compile check |
-| `deploy-oracle.yml` | push to `apps/api/**` or manual | rsync `apps/api` → Oracle VM + restart service |
-| `deploy-vercel.yml` | push to `apps/web/**` or manual | CLI production deploy (optional) |
+| `deploy-oracle.yml` | push `apps/api/**` or manual | rsync + restart systemd on Oracle |
+| `sync-vercel-env.yml` | manual | set API URL + `UI_TOKEN_SECRET`, redeploy UI |
+| `deploy-vercel.yml` | push `apps/web/**` or manual | optional CLI production deploy |
+| `deploy-space.yml` | optional | legacy HF Space sync (skipped without HF secrets) |
 
-**GitHub Actions secrets** (Settings → Secrets → Actions):
+**Required Actions secrets for Oracle + Vercel:**
 
-| Secret | Used by | Notes |
-| --- | --- | --- |
-| `ORACLE_HOST` | API deploy | VM public IP or host |
-| `ORACLE_USER` | API deploy | SSH user, e.g. `ubuntu` |
-| `ORACLE_SSH_KEY` | API deploy | Private key with access to the VM (enables CI deploy) |
-| `ORACLE_APP_DIR` | API deploy | Optional; defaults to `/opt/rembg/current` |
-| `VERCEL_TOKEN` | Optional Vercel CLI | From vercel.com/account/tokens |
-| `VERCEL_ORG_ID` | Optional Vercel CLI | From `.vercel/project.json` after `vercel link` |
-| `VERCEL_PROJECT_ID` | Optional Vercel CLI | Same |
+| Secret | Used by |
+| --- | --- |
+| `ORACLE_HOST` / `ORACLE_USER` / `ORACLE_SSH_KEY` | Oracle deploy |
+| `API_KEYS` / `UI_TOKEN_SECRET` / `WEB_ORIGIN` | App config sync helpers |
+| `VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` | Vercel CLI workflows |
 
-After linking the GitHub repo in the Vercel dashboard (root `apps/web`), pushes to `main` deploy the UI automatically even without `VERCEL_*` secrets.
+Vercel Git integration (root `apps/web`) still deploys the UI on push to `main`.
 
 ### Smoke test
 
-1. Open the Vercel URL, drop a photo (after idle, expect “Waking worker…”).
+1. Open the Vercel URL, drop a photo (after restart, expect “Waking worker…” briefly).
 2. `curl` with a Bearer key and `--max-time 120`.
 
 ## Out of scope (this iteration)
 
-No accounts, billing, key dashboard, image storage, batch/video, background replacement, RMBG-2.0 (CC BY-NC), `birefnet-massive` on free hardware, GPU hosts, or SDKs. See the product plan for the full list.
+No billing, image storage, batch/video, background replacement, RMBG-2.0 (CC BY-NC), `birefnet-massive` on free hardware, GPU hosts, or SDKs. See the product plan for the full list.
 
 ## License
 

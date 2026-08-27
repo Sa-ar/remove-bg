@@ -1,0 +1,122 @@
+name: Deploy API to Hugging Face Space
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - ".github/workflows/deploy-space.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-space
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Sync apps/api → HF Space
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require HF secrets
+        id: check
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USERNAME: ${{ secrets.HF_USERNAME }}
+          HF_SPACE: ${{ secrets.HF_SPACE }}
+        run: |
+          if [ -z "$HF_TOKEN" ] || [ -z "$HF_USERNAME" ] || [ -z "$HF_SPACE" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Missing HF_TOKEN / HF_USERNAME / HF_SPACE — Space deploy skipped."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip == 'false'
+
+      - uses: actions/setup-python@v5
+        if: steps.check.outputs.skip == 'false'
+        with:
+          python-version: "3.12"
+
+      - name: Create Space if needed + push apps/api
+        if: steps.check.outputs.skip == 'false'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USERNAME: ${{ secrets.HF_USERNAME }}
+          HF_SPACE: ${{ secrets.HF_SPACE }}
+          # Optional: sync runtime secrets to the Space when present
+          API_KEYS: ${{ secrets.API_KEYS }}
+          UI_TOKEN_SECRET: ${{ secrets.UI_TOKEN_SECRET }}
+          WEB_ORIGIN: ${{ secrets.WEB_ORIGIN }}
+        run: |
+          set -euo pipefail
+          pip install -q huggingface_hub
+
+          python <<'PY'
+          import os
+          from huggingface_hub import HfApi, space_info
+          from huggingface_hub.utils import RepositoryNotFoundError
+
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          repo_id = f"{os.environ['HF_USERNAME']}/{os.environ['HF_SPACE']}"
+          try:
+              space_info(repo_id, token=os.environ["HF_TOKEN"])
+              print(f"Space exists: {repo_id}")
+          except RepositoryNotFoundError:
+              print(f"Creating Space: {repo_id}")
+              api.create_repo(
+                  repo_id=repo_id,
+                  repo_type="space",
+                  space_sdk="docker",
+                  private=False,
+                  exist_ok=True,
+              )
+
+          secrets = {
+              "API_KEYS": os.environ.get("API_KEYS", ""),
+              "UI_TOKEN_SECRET": os.environ.get("UI_TOKEN_SECRET", ""),
+              "WEB_ORIGIN": os.environ.get("WEB_ORIGIN", ""),
+              "MODEL": "birefnet-general",
+          }
+          for key, value in secrets.items():
+              if value:
+                  api.add_space_secret(repo_id=repo_id, key=key, value=value)
+                  print(f"Set Space secret: {key}")
+              else:
+                  print(f"Skip Space secret (not in GitHub secrets): {key}")
+          print(f"Space URL: https://huggingface.co/spaces/{repo_id}")
+          print(f"API host: https://{os.environ['HF_USERNAME'].lower().replace('_', '-')}-{os.environ['HF_SPACE'].lower().replace('_', '-')}.hf.space")
+          PY
+
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+          # Prefer user:token form for HF git auth
+          SPACE_URL="https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/${HF_SPACE}"
+          WORKSPACE="${GITHUB_WORKSPACE}"
+
+          rm -rf /tmp/hf-space
+          if git clone --depth 1 "$SPACE_URL" /tmp/hf-space; then
+            echo "Cloned existing Space"
+          else
+            mkdir -p /tmp/hf-space
+            git -C /tmp/hf-space init -b main
+            git -C /tmp/hf-space remote add origin "$SPACE_URL"
+          fi
+
+          rsync -a --delete \
+            --exclude '.venv' \
+            --exclude '__pycache__' \
+            --exclude '.env' \
+            --exclude '.gitignore' \
+            "${WORKSPACE}/apps/api/" /tmp/hf-space/
+
+          cd /tmp/hf-space
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No Space changes to deploy."
+            exit 0
+          fi
+          git commit -m "Deploy from ${GITHUB_REPOSITORY}@${GITHUB_SHA}"
+          git push -u origin HEAD:main --force
