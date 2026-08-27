@@ -14,5 +14,5 @@ function getSql(): Sql {
 }
 
 /** Lazy neon client — import-safe at build time without DATABASE_URL. */
-export const sql: Sql = ((strings: TemplateStringsArray, ...values: any[]) =>
+export const sql: Sql = ((strings: TemplateStringsArray, ...values: unknown[]) =>
   getSql()(strings, ...values)) as Sql;
