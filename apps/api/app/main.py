@@ -2,6 +2,7 @@ import asyncio
 import io
 import logging
 import os
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Optional
@@ -36,12 +37,22 @@ ALLOWED_CONTENT_TYPES = {
     "image/heic",
     "image/heif",
 }
-MODEL_NAME = os.getenv("MODEL", "birefnet-general")
+# Default model is the fast isnet; birefnet-general is available as an opt-in
+# override for callers who want maximum quality (much slower on CPU).
+DEFAULT_MODEL = os.getenv("MODEL", "isnet-general-use")
+ALLOWED_MODELS = {
+    m.strip()
+    for m in os.getenv("ALLOWED_MODELS", "isnet-general-use,birefnet-general").split(",")
+    if m.strip()
+}
+ALLOWED_MODELS.add(DEFAULT_MODEL)
 API_KEYS = {k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()}
 UI_TOKEN_SECRET = os.getenv("UI_TOKEN_SECRET", "")
 WEB_ORIGIN = os.getenv("WEB_ORIGIN", "http://localhost:3000").rstrip("/")
 
-session = None
+# Sessions are loaded lazily and cached per model name.
+_sessions: dict[str, object] = {}
+_sessions_lock = threading.Lock()
 model_ready = False
 model_error: Optional[str] = None
 inference_lock = asyncio.Lock()
@@ -56,6 +67,7 @@ class ErrorBody(BaseModel):
 class HealthBody(BaseModel):
     status: str
     model: str
+    models: list[str]
     device: str
 
 
@@ -83,14 +95,25 @@ def get_limiter_key(request: Request) -> str:
 limiter = Limiter(key_func=get_limiter_key)
 
 
+def _get_session(name: str):
+    session = _sessions.get(name)
+    if session is None:
+        with _sessions_lock:
+            session = _sessions.get(name)
+            if session is None:
+                logger.info("Loading model %s", name)
+                session = new_session(name)
+                _sessions[name] = session
+                logger.info("Model ready: %s", name)
+    return session
+
+
 def _load_model() -> None:
-    global session, model_ready, model_error
+    global model_ready, model_error
     try:
-        logger.info("Loading model %s", MODEL_NAME)
-        session = new_session(MODEL_NAME)
+        _get_session(DEFAULT_MODEL)
         model_ready = True
         model_error = None
-        logger.info("Model ready: %s", MODEL_NAME)
     except Exception as exc:  # noqa: BLE001
         model_ready = False
         model_error = str(exc)
@@ -106,7 +129,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="Remove BG API",
     version="1.0.0",
-    description="High-quality background removal via BiRefNet (rembg).",
+    description="Background removal via rembg (isnet-general-use by default, birefnet-general opt-in via the `model` field).",
     lifespan=lifespan,
 )
 app.state.limiter = limiter
@@ -207,9 +230,11 @@ async def health():
             "Worker is loading the model" if not model_error else "Model failed to load",
             "waking" if not model_error else "model_error",
             model_error
-            or "Wait for the free Space cold start (often 1–2 minutes), then retry.",
+            or "The model is still loading; retry in a few seconds.",
         )
-    return HealthBody(status="ok", model=MODEL_NAME, device="cpu")
+    return HealthBody(
+        status="ok", model=DEFAULT_MODEL, models=sorted(ALLOWED_MODELS), device="cpu"
+    )
 
 
 def _guess_allowed(content_type: Optional[str], filename: Optional[str]) -> bool:
@@ -221,8 +246,8 @@ def _guess_allowed(content_type: Optional[str], filename: Optional[str]) -> bool
     return False
 
 
-def _run_remove(data: bytes, crop: bool) -> bytes:
-    assert session is not None
+def _run_remove(data: bytes, crop: bool, model_name: str) -> bytes:
+    session = _get_session(model_name)
     output = remove(
         data,
         session=session,
@@ -262,6 +287,7 @@ async def remove_bg(
     request: Request,
     file: UploadFile = File(...),
     crop: bool = Form(False),
+    model: str = Form(DEFAULT_MODEL),
     _auth: str = Depends(verify_auth),
 ) -> Response:
     if not model_ready:
@@ -269,7 +295,7 @@ async def remove_bg(
             503,
             "Worker is not ready",
             "waking",
-            "The free worker is waking or loading BiRefNet. Retry in a minute (client timeout ≥ 120s).",
+            "The worker is still loading the model. Retry in a few seconds.",
         )
 
     if not _guess_allowed(file.content_type, file.filename):
@@ -278,6 +304,14 @@ async def remove_bg(
             "Unsupported file type",
             "invalid_type",
             "Upload JPEG, PNG, WebP, or HEIC.",
+        )
+
+    if model not in ALLOWED_MODELS:
+        return error_response(
+            400,
+            f"Unknown model '{model}'",
+            "invalid_model",
+            f"Allowed models: {', '.join(sorted(ALLOWED_MODELS))}.",
         )
 
     data = await file.read()
@@ -308,7 +342,7 @@ async def remove_bg(
 
     try:
         try:
-            png = await asyncio.to_thread(_run_remove, data, crop)
+            png = await asyncio.to_thread(_run_remove, data, crop, model)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Inference failed")
             return error_response(

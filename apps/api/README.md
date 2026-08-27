@@ -1,30 +1,48 @@
-title: Remove BG API
-emoji: ✂️
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
-license: mit
-short_description: High-quality BiRefNet background removal API
----
-
 # Remove BG API
 
-FastAPI + `rembg` (`birefnet-general`) background removal worker.
+FastAPI + `rembg` background removal worker.
 
-## Secrets
+Default model on Oracle: `isnet-general-use` (fast). Callers can pass multipart
+`model=birefnet-general` for higher quality (much slower on CPU).
 
-Set these in the Space settings:
+Deployed as systemd `rembg.service` (uvicorn on `127.0.0.1:5000`) behind nginx
+TLS at **https://api.rembg.site**. See [`deploy.sh`](./deploy.sh).
+
+## Configuration
+
+Read from `/opt/rembg/current/.env` (not overwritten by deploys):
 
 - `API_KEYS` — comma-separated Bearer keys for other projects
-- `UI_TOKEN_SECRET` — shared with the Vercel web app (JWT for the UI)
-- `WEB_ORIGIN` — Vercel URL, e.g. `https://your-app.vercel.app`
+- `UI_TOKEN_SECRET` — shared with the Vercel web app (UI upload JWTs)
+- `WEB_ORIGIN` — primary Vercel origin for CORS
+- `EXTRA_CORS_ORIGINS` — optional comma-separated extra origins
+- `MODEL` — default rembg session (default `isnet-general-use`)
+- `ALLOWED_MODELS` — optional allow-list (default includes isnet + birefnet)
 
 ## Endpoints
 
-- `GET /v1/health`
-- `POST /v1/remove` — multipart `file` → PNG with alpha
-- Interactive docs: `/docs`
+- `GET /v1/health` — `200` when ready, `503 code=waking` while loading
+- `POST /v1/remove` — multipart `file` (+ optional `crop`, `model`) → PNG with alpha
+- Auth: `Authorization: Bearer <API_KEY|ui-jwt>`
+- Docs: `/docs`
 
-Hardware: **CPU Basic** (16GB). Free Spaces sleep when idle; allow 120s client timeouts.
+## Deploy
+
+```bash
+./deploy.sh            # SSH host alias `rembg`
+./deploy.sh user@host
+```
+
+CI: `.github/workflows/deploy-oracle.yml` on pushes to `apps/api/**`
+(secrets: `ORACLE_HOST`, `ORACLE_USER`, `ORACLE_SSH_KEY`).
+
+## Local
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload --port 8000
+```
+
+Or from repo root: `docker compose up --build`.

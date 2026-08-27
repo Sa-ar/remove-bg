@@ -1,0 +1,75 @@
+name: Sync Vercel production env
+
+# Sets NEXT_PUBLIC_API_URL + UI_TOKEN_SECRET from GitHub Actions secrets
+# and triggers a production redeploy so the public API URL is baked in.
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: Public API base URL
+        required: true
+        default: https://api.rembg.site
+
+concurrency:
+  group: sync-vercel-env
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Env + redeploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require secrets
+        id: check
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          UI_TOKEN_SECRET: ${{ secrets.UI_TOKEN_SECRET }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ] || [ -z "$UI_TOKEN_SECRET" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::error::Need VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID, UI_TOKEN_SECRET"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip == 'false'
+
+      - name: Upsert production + preview env
+        if: steps.check.outputs.skip == 'false'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          UI_TOKEN_SECRET: ${{ secrets.UI_TOKEN_SECRET }}
+          API_URL: ${{ inputs.api_url }}
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+          upsert() {
+            local key="$1" value="$2" target="$3"
+            npx --yes vercel@41 env rm "$key" "$target" --yes --token "$VERCEL_TOKEN" 2>/dev/null || true
+            printf '%s' "$value" | npx --yes vercel@41 env add "$key" "$target" --token "$VERCEL_TOKEN"
+          }
+
+          upsert NEXT_PUBLIC_API_URL "$API_URL" production
+          upsert NEXT_PUBLIC_API_URL "$API_URL" preview
+          upsert UI_TOKEN_SECRET "$UI_TOKEN_SECRET" production
+          upsert UI_TOKEN_SECRET "$UI_TOKEN_SECRET" preview
+
+      - name: Production redeploy
+        if: steps.check.outputs.skip == 'false'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes vercel@41 deploy --prod --yes --token="$VERCEL_TOKEN"

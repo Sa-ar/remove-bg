@@ -1,0 +1,105 @@
+name: Deploy API to Oracle
+
+# Syncs apps/api → /opt/rembg/current on the Always Free VM, then restarts
+# rembg.service (uvicorn behind nginx). Does not touch /opt/rembg/current/.env.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - ".github/workflows/deploy-oracle.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-oracle
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: rsync + restart rembg
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require Oracle secrets
+        id: check
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+          ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+        run: |
+          if [ -z "$ORACLE_HOST" ] || [ -z "$ORACLE_USER" ] || [ -z "$ORACLE_SSH_KEY" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Missing ORACLE_HOST / ORACLE_USER / ORACLE_SSH_KEY — Oracle deploy skipped."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip == 'false'
+
+      - name: Configure SSH
+        if: steps.check.outputs.skip == 'false'
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+          ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$ORACLE_SSH_KEY" > ~/.ssh/oracle_gha
+          chmod 600 ~/.ssh/oracle_gha
+          ssh-keyscan -T 10 "$ORACLE_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          {
+            echo "Host rembg-oracle"
+            echo "  HostName ${ORACLE_HOST}"
+            echo "  User ${ORACLE_USER}"
+            echo "  IdentityFile ~/.ssh/oracle_gha"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+          } >> ~/.ssh/config
+
+      - name: Sync apps/api → /opt/rembg/current
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          rsync -az --delete \
+            --exclude '__pycache__/' \
+            --exclude '*.pyc' \
+            --exclude '.env' \
+            --exclude '.venv/' \
+            --exclude '.git/' \
+            -e ssh \
+            apps/api/ rembg-oracle:/opt/rembg/current/
+
+      - name: Install deps, warm default model, restart
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          ssh rembg-oracle 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          /opt/rembg/bin/pip install --no-input -q -r /opt/rembg/current/requirements.txt
+          MODEL="$(grep -E '^MODEL=' /opt/rembg/current/.env | cut -d= -f2- || true)"
+          MODEL="${MODEL:-isnet-general-use}"
+          U2NET_HOME=/opt/rembg/models /opt/rembg/bin/python -c "from rembg import new_session; new_session(\"${MODEL}\")"
+          sudo systemctl restart rembg.service
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:5000/v1/health >/dev/null 2>&1; then
+              echo "healthy after ${i} attempts"
+              curl -fsS http://127.0.0.1:5000/v1/health
+              echo
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "health check timed out"
+          sudo journalctl -u rembg.service -n 40 --no-pager
+          exit 1
+          REMOTE
+
+      - name: Public smoke check
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 "https://api.rembg.site/v1/health"
+          echo

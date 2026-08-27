@@ -136,7 +136,7 @@ export function Remover() {
           setPhase("error");
           setWorker("down");
           setError(
-            "Worker did not wake in time. Free Spaces can take 1–2 minutes after idle. Retry.",
+            "Worker did not become ready in time. First load after idle can take a minute. Retry.",
           );
           return;
         }
