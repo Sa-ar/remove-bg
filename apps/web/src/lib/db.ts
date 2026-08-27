@@ -1,5 +1,18 @@
-import { neon } from "@neondatabase/serverless";
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 
-if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
+type Sql = NeonQueryFunction<false, false>;
 
-export const sql = neon(process.env.DATABASE_URL);
+let cached: Sql | undefined;
+
+function getSql(): Sql {
+  if (!cached) {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error("DATABASE_URL is not set");
+    cached = neon(url);
+  }
+  return cached;
+}
+
+/** Lazy neon client — import-safe at build time without DATABASE_URL. */
+export const sql: Sql = ((strings: TemplateStringsArray, ...values: any[]) =>
+  getSql()(strings, ...values)) as Sql;
