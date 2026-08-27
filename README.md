@@ -42,6 +42,8 @@ npm run dev
 
 Use the **same** `UI_TOKEN_SECRET` in `apps/api/.env` and `apps/web/.env.local`.
 
+For the optional keys/usage dashboard, set `DATABASE_URL` (Neon) on both web and API and apply `db/migrations/0001_init.sql`.
+
 ## API usage
 
 ```bash
@@ -52,12 +54,12 @@ curl -X POST "http://localhost:8000/v1/remove" \
   -o removed.png
 ```
 
-- Auth: `Authorization: Bearer <key>` from `API_KEYS`, or a short-lived UI JWT
+- Auth: `Authorization: Bearer <key>` from `API_KEYS`, a short-lived UI JWT, or a DB-backed project key
 - Success: `image/png` with alpha
 - Errors: `{ "error", "code", "hint" }`
 - OpenAPI: `/docs`
 
-**Cold / first inference:** After a service restart the model loads into RAM; `GET /v1/health` returns `503` with `code=waking` until ready. Client timeout ≥ 120s. Warm CPU inference is typically a few seconds (`isnet-general-use`).
+**Cold / first inference:** The Oracle VM stays on (no Space sleep). After a service restart the model loads into RAM; `GET /v1/health` returns `503` with `code=waking` until ready. Client timeout ≥ 120s. Warm CPU inference is typically a few seconds (`isnet-general-use`).
 
 ## Production
 
@@ -86,12 +88,12 @@ Vercel Git integration (root `apps/web`) still deploys the UI on push to `main`.
 
 ### Smoke test
 
-1. Open the Vercel URL, drop a photo (after idle, expect “Waking worker…”).
+1. Open the Vercel URL, drop a photo (after restart, expect “Waking worker…” briefly).
 2. `curl` with a Bearer key and `--max-time 120`.
 
 ## Out of scope (this iteration)
 
-No accounts, billing, key dashboard, image storage, batch/video, background replacement, RMBG-2.0 (CC BY-NC), `birefnet-massive` on free hardware, GPU hosts, or SDKs. See the product plan for the full list.
+No billing, image storage, batch/video, background replacement, RMBG-2.0 (CC BY-NC), `birefnet-massive` on free hardware, GPU hosts, or SDKs. See the product plan for the full list.
 
 ## License
 

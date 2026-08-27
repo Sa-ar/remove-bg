@@ -46,3 +46,8 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 Or from repo root: `docker compose up --build`.
+
+## Optional database
+
+When `DATABASE_URL` is set, Bearer keys can resolve to Neon-backed project keys and
+usage events are recorded. Without it, only env `API_KEYS` and UI JWTs work.
