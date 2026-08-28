@@ -22,7 +22,18 @@ async def _insert(project_id, api_key_id, model, bytes_in, bytes_out, duration_m
             "values ($1, $2, $3, $4, $5, $6, $7, $8)",
             project_id, api_key_id, model, bytes_in, bytes_out, duration_ms, status, user_id,
         )
+        return
     except Exception:  # noqa: BLE001 — usage logging never affects the response
+        logger.exception("usage insert with user_id failed")
+    # Migration 0002 may not be applied yet; keep logging on the old schema.
+    try:
+        await pool.execute(
+            "insert into usage_events "
+            "(project_id, api_key_id, model, bytes_in, bytes_out, duration_ms, status) "
+            "values ($1, $2, $3, $4, $5, $6, $7)",
+            project_id, api_key_id, model, bytes_in, bytes_out, duration_ms, status,
+        )
+    except Exception:  # noqa: BLE001
         logger.exception("usage insert failed")
 
 

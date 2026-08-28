@@ -20,10 +20,8 @@ export async function POST() {
     );
   }
 
-  const token = await new SignJWT({
-    purpose: "ui-upload",
-    sub: session.userId,
-  })
+  const token = await new SignJWT({ purpose: "ui-upload" })
+    .setSubject(session.userId)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("5m")

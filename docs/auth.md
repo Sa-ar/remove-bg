@@ -45,12 +45,12 @@ psql "$DATABASE_URL" -f db/migrations/0002_project_owner.sql
 | `apps/web/src/lib/auth/server.ts` | `createNeonAuth` |
 | `apps/web/src/lib/auth/client.ts` | browser client |
 | `apps/web/src/app/api/auth/[...path]/route.ts` | Auth HTTP handler |
-| `apps/web/proxy.ts` | Protects `/`, `/dashboard`, `/api/token` |
+| `apps/web/src/proxy.ts` | Protects `/`, `/dashboard`, `/dashboard/usage` |
 | `apps/web/src/app/auth/sign-in` / `sign-up` | Email/password UI |
 
 Public: `/docs`, `/auth/*`, `/api/auth/*`.
 
-`POST /api/token` requires a session and puts `sub` (Neon user id) on the UI JWT. The API attributes those requests to the reserved `web-ui` project and stores `user_id` on `usage_events` when the column exists.
+`POST /api/token` and `/dashboard/api/*` return JSON `401` without a session. The token route puts `sub` (Neon user id) on the UI JWT. The API attributes those requests to the reserved `web-ui` project and stores `user_id` on `usage_events` when the column exists.
 
 Dashboard routes call `requireUserId()` and filter by `projects.owner_id`. Reserved projects `web-ui` and `legacy` cannot have dashboard keys.
 

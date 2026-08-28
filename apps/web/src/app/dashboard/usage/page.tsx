@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { neon } from "@neondatabase/serverless";
 import { auth } from "@/lib/auth/server";
 import { buildUsageQuery } from "@/lib/usageQuery";
@@ -6,13 +7,17 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export default async function UsagePage() {
-  const { data: session } = await auth.getSession();
-  if (!session?.user?.id) {
-    return null;
+  let userId: string | undefined;
+  try {
+    const { data: session } = await auth.getSession();
+    userId = session?.user?.id;
+  } catch {
+    userId = undefined;
   }
+  if (!userId) redirect("/auth/sign-in");
   const { text, params } = buildUsageQuery({
     days: 30,
-    ownerId: session.user.id,
+    ownerId: userId,
   });
   const client = neon(process.env.DATABASE_URL!);
   const rows = (await client.query(text, params)) as {
