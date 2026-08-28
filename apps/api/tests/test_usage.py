@@ -15,6 +15,7 @@ async def test_record_usage_inserts(monkeypatch):
     await asyncio.sleep(0)  # let the task run
     assert "insert into usage_events" in captured["sql"]
     assert captured["args"][0] == "p1" and captured["args"][1] == "k1"
+    assert captured["args"][7] is None
 
 async def test_record_usage_noop_without_pool(monkeypatch):
     monkeypatch.setattr("app.db.get_pool", lambda: None)

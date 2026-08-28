@@ -52,10 +52,14 @@ const png = await res.blob(); // image/png with alpha`;
         <h2 className="text-xl font-medium">Auth</h2>
         <p className="text-sm text-muted">
           Send <code className="text-foreground">Authorization: Bearer &lt;key&gt;</code>.
-          Long-lived keys live in the API{" "}
-          <code className="text-foreground">API_KEYS</code> env (comma-separated).
-          The browser UI uses short-lived JWTs from{" "}
-          <code className="text-foreground">POST /api/token</code> instead.
+          Create project keys in the{" "}
+          <Link href="/dashboard" className="text-accent underline">
+            dashboard
+          </Link>{" "}
+          after signing in. Legacy env{" "}
+          <code className="text-foreground">API_KEYS</code> still work.
+          The signed-in website uses short-lived JWTs from{" "}
+          <code className="text-foreground">POST /api/token</code> (session required).
         </p>
       </section>
 
@@ -84,15 +88,16 @@ const png = await res.blob(); // image/png with alpha`;
       </section>
 
       <section className="mt-10 space-y-3">
-        <h2 className="text-xl font-medium">Cold start (free tier)</h2>
+        <h2 className="text-xl font-medium">Restarts and first inference</h2>
         <p className="text-sm text-muted">
-          The Hugging Face Space sleeps when idle. First request can take 1–2
-          minutes. Set client timeouts to at least{" "}
-          <strong className="text-foreground">120 seconds</strong>.{" "}
-          <code className="text-foreground">GET /v1/health</code> returns{" "}
+          The Oracle VM stays on. After a service restart the model loads into
+          RAM; <code className="text-foreground">GET /v1/health</code> returns{" "}
           <code className="text-foreground">503</code> with{" "}
-          <code className="text-foreground">code=waking</code> while the model
-          loads. CPU inference after wake is typically 10–40s per image.
+          <code className="text-foreground">code=waking</code> until ready.
+          Set client timeouts to at least{" "}
+          <strong className="text-foreground">120 seconds</strong>. Warm CPU
+          inference is typically a few seconds (
+          <code className="text-foreground">isnet-general-use</code>).
         </p>
       </section>
 

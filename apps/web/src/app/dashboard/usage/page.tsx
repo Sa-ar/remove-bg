@@ -1,23 +1,48 @@
-async function getUsage(days: number) {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "";
-  const res = await fetch(`${base}/dashboard/api/usage?days=${days}`, { cache: "no-store" });
-  return res.json() as Promise<{ day: string; requests: number }[]>;
-}
+import { neon } from "@neondatabase/serverless";
+import { auth } from "@/lib/auth/server";
+import { buildUsageQuery } from "@/lib/usageQuery";
+import Link from "next/link";
+
 export const dynamic = "force-dynamic";
+
 export default async function UsagePage() {
-  const rows = await getUsage(30);
+  const { data: session } = await auth.getSession();
+  if (!session?.user?.id) {
+    return null;
+  }
+  const { text, params } = buildUsageQuery({
+    days: 30,
+    ownerId: session.user.id,
+  });
+  const client = neon(process.env.DATABASE_URL!);
+  const rows = (await client.query(text, params)) as {
+    day: string;
+    requests: number;
+  }[];
   const max = Math.max(1, ...rows.map((r) => r.requests));
   return (
     <main className="mx-auto max-w-3xl p-8">
       <h1 className="text-xl font-medium">Usage (30 days)</h1>
+      <p className="mt-1 text-sm text-muted">
+        <Link href="/dashboard" className="text-accent underline">
+          ← Keys
+        </Link>
+      </p>
       <div className="mt-6 space-y-1">
-        {rows.map((r) => (
-          <div key={r.day} className="flex items-center gap-2 text-sm">
-            <span className="w-24 text-muted">{r.day.slice(0, 10)}</span>
-            <span className="h-4 rounded bg-foreground" style={{ width: `${(r.requests / max) * 100}%` }} />
-            <span>{r.requests}</span>
-          </div>
-        ))}
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted">No usage yet.</p>
+        ) : (
+          rows.map((r) => (
+            <div key={r.day} className="flex items-center gap-2 text-sm">
+              <span className="w-24 text-muted">{String(r.day).slice(0, 10)}</span>
+              <span
+                className="h-4 rounded bg-foreground"
+                style={{ width: `${(r.requests / max) * 100}%` }}
+              />
+              <span>{r.requests}</span>
+            </div>
+          ))
+        )}
       </div>
     </main>
   );

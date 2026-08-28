@@ -14,6 +14,17 @@ async def test_ui_jwt_maps_to_web_ui(monkeypatch):
     tok = jwt.encode({"purpose": "ui-upload"}, "s3cret", algorithm="HS256")
     p = await main.verify_auth(f"Bearer {tok}")
     assert p.kind == "ui" and p.project_id == keys.WEB_UI_PROJECT_ID
+    assert p.user_id is None
+
+
+async def test_ui_jwt_carries_sub_as_user_id():
+    tok = jwt.encode(
+        {"purpose": "ui-upload", "sub": "user-42"},
+        "s3cret",
+        algorithm="HS256",
+    )
+    p = await main.verify_auth(f"Bearer {tok}")
+    assert p.kind == "ui" and p.user_id == "user-42"
 
 
 async def test_static_key_maps_to_legacy():

@@ -4,6 +4,8 @@ Live API: **https://api.rembg.site** (ephemeral public IP `84.13.79.22`, `il-jer
 
 Stack: `rembg.service` (FastAPI in `/opt/rembg/current`, venv `/opt/rembg`) behind nginx + Certbot. Not Docker.
 
+See also [architecture.md](./architecture.md), [runbook.md](./runbook.md), [auth.md](./auth.md).
+
 ## SSH
 
 ```bash
@@ -19,6 +21,27 @@ Reserve only if you plan to rebuild; then reserve first, then DNS.
 ## HTTPS
 
 `api.rembg.site` already has a Let's Encrypt cert (Certbot timer). Port 80/443 must be open in **both** the VCN security list and guest iptables.
+
+## CORS
+
+The API always allows:
+
+- `https://www.rembg.site`
+- `https://rembg.site`
+- `https://remove-bg-five-topaz.vercel.app`
+- `WEB_ORIGIN` and `EXTRA_CORS_ORIGINS` from `.env`
+- localhost:3000
+
+If the custom domain still cannot read `/v1/health`, the running process is stale. Deploy `apps/api` or run `scripts/patch-oracle-cors.sh ubuntu@84.13.79.22`.
+
+Recommended box env (not overwritten by rsync):
+
+```
+WEB_ORIGIN=https://www.rembg.site
+EXTRA_CORS_ORIGINS=https://rembg.site,https://remove-bg-five-topaz.vercel.app
+```
+
+GitHub secret `WEB_ORIGIN` should match `https://www.rembg.site`.
 
 ## CI/CD (GitHub Actions)
 
@@ -41,15 +64,15 @@ cd apps/api && ./deploy.sh ubuntu@84.13.79.22
 
 ## App wiring
 
-- API CORS: `WEB_ORIGIN=https://remove-bg-five-topaz.vercel.app`
-- Extra: `EXTRA_CORS_ORIGINS` for the `*.vercel.app` project URL
-- Web: `NEXT_PUBLIC_API_URL=https://api.rembg.site` and the same `UI_TOKEN_SECRET` as the API
+- API CORS: see above (custom domain is required; Vercel URL alone is not enough)
+- Web: `NEXT_PUBLIC_API_URL=https://api.rembg.site`, same `UI_TOKEN_SECRET` as the API
+- Neon: `DATABASE_URL` on the box (direct) and Vercel (pooled); Auth env on Vercel only
 
 ## Safe API use
 
 | Client | Auth |
 | --- | --- |
-| Browser UI | Short-lived JWT from Next.js `POST /api/token` |
-| Other backends | `Authorization: Bearer <key>` from `API_KEYS` |
+| Browser UI | Short-lived JWT from Next.js `POST /api/token` (signed-in session) |
+| Other backends | Dashboard project key, or legacy `API_KEYS` |
 
 Never put long-lived API keys in the browser. Client timeouts ≥ 120s for first inference after restart.

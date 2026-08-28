@@ -30,6 +30,9 @@ jobs:
         env:
           UI_TOKEN_SECRET: ci-placeholder-secret
           NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEON_AUTH_BASE_URL: https://example.invalid/neondb/auth
+          NEON_AUTH_COOKIE_SECRET: ci-placeholder-secret-at-least-32-chars
+      - run: npm test
 
   api:
     name: API import check
