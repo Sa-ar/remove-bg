@@ -38,6 +38,18 @@ psql "$DATABASE_URL" -f db/migrations/0001_init.sql
 psql "$DATABASE_URL" -f db/migrations/0002_project_owner.sql
 ```
 
+The dashboard was briefly public (PR #1). After 0002, existing keys on unowned / reserved projects still work on the API but cannot be listed by a signed-in user. Optional cleanup:
+
+```sql
+update api_keys
+  set revoked_at = now()
+  where revoked_at is null
+    and project_id in (
+      '00000000-0000-0000-0000-000000000001',
+      '00000000-0000-0000-0000-000000000002'
+    );
+```
+
 ## App wiring
 
 | File | Role |
