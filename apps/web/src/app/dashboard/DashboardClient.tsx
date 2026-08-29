@@ -142,7 +142,10 @@ export default function DashboardClient() {
           Dashboard
         </h1>
         <p className="mt-1 text-sm text-muted">
-          Manage projects and API keys.
+          Manage your projects and API keys.{" "}
+          <a href="/dashboard/usage" className="text-accent underline">
+            Usage
+          </a>
         </p>
       </div>
 

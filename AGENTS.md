@@ -11,11 +11,13 @@
 - Monorepo: `apps/api` (FastAPI + rembg `birefnet-general`) and `apps/web` (Next.js UI); root `docker-compose.yml` for local API.
 - Uses MIT-licensed BiRefNet via rembg; RMBG-2.0 was avoided because of a non-commercial license.
 - Browser uploads go directly to the API (not proxied through Vercel) so large images work on Vercel Hobby body limits.
-- Auth: Bearer `API_KEYS` for API clients and short-lived UI JWTs sharing `UI_TOKEN_SECRET` between web and API; CORS via `WEB_ORIGIN`.
+- Auth: Neon Auth (Managed Better Auth) for the website; dashboard is session-gated and scoped by `projects.owner_id`. API accepts dashboard keys, legacy `API_KEYS`, and short-lived UI JWTs (`purpose=ui-upload`, `sub=<user id>`) sharing `UI_TOKEN_SECRET`.
+- Canonical UI is **https://www.rembg.site**. CORS must allow `https://www.rembg.site` and `https://rembg.site` in addition to the Vercel project URL; missing those origins makes the UI show Worker down while the API is healthy.
 - Original free deploy target was Vercel Hobby (UI) + Hugging Face Docker Space CPU Basic 16GB; HF now requires Pro for free CPU Docker Spaces, so that Spaces path is blocked without Pro.
 - Production API is Oracle Always Free Ampere A1.Flex (2 OCPU / 12GB) in `il-jerusalem-1` at `https://api.rembg.site`; Ubuntu aarch64 SSH user is `ubuntu` (not `opc`); BiRefNet needs ~8–12GB+ RAM so AWS Free Tier micros and small dynos OOM.
 - On Oracle the API runs under systemd (`rembg.service`) behind nginx + Certbot—not Docker; code lives under `/opt/rembg/current`.
 - OCI ephemeral public IPs survive stop/start and are released on terminate; converting to a reserved IP assigns a new address—reserve only if rebuilding, then update DNS.
 - OCI ingress needs both the VCN security list and guest iptables open for 80/443; stock images often allow only SSH (22).
-- GitHub Actions: CI, Vercel UI deploy, HF Space sync, and Oracle API deploy (`deploy-oracle.yml` rsync → restart `rembg`); Oracle needs `ORACLE_HOST`, `ORACLE_USER`, `ORACLE_SSH_KEY` plus shared API/UI secrets.
+- GitHub Actions: CI, Vercel UI deploy, HF Space sync, and Oracle API deploy (`deploy-oracle.yml` rsync → restart `rembg`); Oracle needs `ORACLE_HOST`, `ORACLE_USER`, `ORACLE_SSH_KEY` plus shared API/UI secrets. `WEB_ORIGIN` should be `https://www.rembg.site`.
+- Neon project `remove-bg` (`restless-forest-85176663`, `aws-eu-central-1`): pooled `DATABASE_URL` on Vercel, direct on Oracle; Auth env (`NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`) on Vercel only.
 - Cold-start / first-inference clients should use ≥120s timeouts; health can report waking while the model loads.

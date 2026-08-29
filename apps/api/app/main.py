@@ -53,6 +53,13 @@ ALLOWED_MODELS.add(DEFAULT_MODEL)
 API_KEYS = {k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()}
 UI_TOKEN_SECRET = os.getenv("UI_TOKEN_SECRET", "")
 WEB_ORIGIN = os.getenv("WEB_ORIGIN", "http://localhost:3000").rstrip("/")
+# Always allow the production custom domain. WEB_ORIGIN on the box was left
+# pointing at the Vercel *.vercel.app URL, which made rembg.site look "down".
+PRODUCTION_CORS_ORIGINS = (
+    "https://www.rembg.site",
+    "https://rembg.site",
+    "https://remove-bg-five-topaz.vercel.app",
+)
 
 # Sessions are loaded lazily and cached per model name.
 _sessions: dict[str, object] = {}
@@ -76,13 +83,16 @@ class HealthBody(BaseModel):
 
 
 def _parse_origins() -> list[str]:
-    origins = [WEB_ORIGIN]
+    origins: list[str] = []
+    for candidate in (WEB_ORIGIN, *PRODUCTION_CORS_ORIGINS):
+        origin = (candidate or "").strip().rstrip("/")
+        if origin and origin not in origins:
+            origins.append(origin)
     extra = os.getenv("EXTRA_CORS_ORIGINS", "")
     for part in extra.split(","):
         origin = part.strip().rstrip("/")
         if origin and origin not in origins:
             origins.append(origin)
-    # Local Next.js defaults
     for local in ("http://localhost:3000", "http://127.0.0.1:3000"):
         if local not in origins:
             origins.append(local)
@@ -189,12 +199,14 @@ async def verify_auth(
                 "hint": "Provide a non-empty API key or UI token",
             },
         )
-    # 1) UI JWT (anonymous website)
+    # 1) UI JWT (signed-in website). `sub` is the Neon Auth user id when present.
     if UI_TOKEN_SECRET:
         try:
             payload = jwt.decode(token, UI_TOKEN_SECRET, algorithms=["HS256"])
             if payload.get("purpose") == "ui-upload":
-                return Principal("ui", keys.WEB_UI_PROJECT_ID)
+                sub = payload.get("sub")
+                user_id = sub.strip() if isinstance(sub, str) and sub.strip() else None
+                return Principal("ui", keys.WEB_UI_PROJECT_ID, user_id=user_id)
         except InvalidTokenError:
             pass
     # 2) legacy static keys

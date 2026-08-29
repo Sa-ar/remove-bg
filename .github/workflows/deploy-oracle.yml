@@ -103,3 +103,8 @@ jobs:
           set -euo pipefail
           curl -fsS --max-time 30 "https://api.rembg.site/v1/health"
           echo
+          headers="$(curl -sS -D - -o /dev/null --max-time 30 \
+            -H "Origin: https://www.rembg.site" \
+            "https://api.rembg.site/v1/health")"
+          echo "$headers"
+          echo "$headers" | grep -qi "access-control-allow-origin: https://www.rembg.site"

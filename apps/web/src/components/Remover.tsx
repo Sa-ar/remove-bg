@@ -240,7 +240,7 @@ export function Remover() {
           </span>
           {worker === "waking" && (
             <span className="mt-4 text-sm text-accent">
-              Waking free worker… first request after idle can take 1–2 minutes.
+              Worker is loading the model… first request after a restart can take about a minute.
             </span>
           )}
           {phase === "error" && error && (
@@ -275,8 +275,8 @@ export function Remover() {
           </p>
           <p className="max-w-md text-sm text-muted">
             {phase === "waking"
-              ? "The free Hugging Face Space was asleep. This often takes 1–2 minutes."
-              : "CPU inference is typically 10–40 seconds on the free tier."}
+              ? "The API is loading the model after a restart. This can take about a minute."
+              : "CPU inference is typically a few seconds when the worker is warm."}
           </p>
           {originalUrl && (
             // eslint-disable-next-line @next/next/no-img-element

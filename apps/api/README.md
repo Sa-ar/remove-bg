@@ -14,8 +14,9 @@ Read from `/opt/rembg/current/.env` (not overwritten by deploys):
 
 - `API_KEYS` — comma-separated Bearer keys for other projects
 - `UI_TOKEN_SECRET` — shared with the Vercel web app (UI upload JWTs)
-- `WEB_ORIGIN` — primary Vercel origin for CORS
+- `WEB_ORIGIN` — primary CORS origin (`https://www.rembg.site` in production)
 - `EXTRA_CORS_ORIGINS` — optional comma-separated extra origins
+- Production also always allows `https://www.rembg.site`, `https://rembg.site`, and the Vercel project URL
 - `MODEL` — default rembg session (default `isnet-general-use`)
 - `ALLOWED_MODELS` — optional allow-list (default includes isnet + birefnet)
 
@@ -23,7 +24,7 @@ Read from `/opt/rembg/current/.env` (not overwritten by deploys):
 
 - `GET /v1/health` — `200` when ready, `503 code=waking` while loading
 - `POST /v1/remove` — multipart `file` (+ optional `crop`, `model`) → PNG with alpha
-- Auth: `Authorization: Bearer <API_KEY|ui-jwt>`
+- Auth: `Authorization: Bearer <API_KEY|ui-jwt>` (UI JWT requires a signed-in website session)
 - Docs: `/docs`
 
 ## Deploy

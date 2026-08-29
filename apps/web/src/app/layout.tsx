@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Link from "next/link";
+import { Header } from "@/components/Header";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,6 +18,8 @@ export const metadata: Metadata = {
   description: "High-quality background removal — UI and API",
 };
 
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
@@ -25,19 +27,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <header className="flex items-center justify-between border-b border-border px-6 py-4">
-          <Link href="/" className="text-lg font-semibold tracking-tight">
-            Remove BG
-          </Link>
-          <nav className="flex gap-4 text-sm text-muted">
-            <Link href="/" className="hover:text-foreground">
-              Tool
-            </Link>
-            <Link href="/docs" className="hover:text-foreground">
-              API docs
-            </Link>
-          </nav>
-        </header>
+        <Header />
         <main className="flex flex-1 flex-col">{children}</main>
       </body>
     </html>

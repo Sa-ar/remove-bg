@@ -1,9 +1,13 @@
 import { SignJWT } from "jose";
 import { NextResponse } from "next/server";
+import { requireUserId } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
 export async function POST() {
+  const session = await requireUserId();
+  if (session.error) return session.error;
+
   const secret = process.env.UI_TOKEN_SECRET;
   if (!secret) {
     return NextResponse.json(
@@ -17,6 +21,7 @@ export async function POST() {
   }
 
   const token = await new SignJWT({ purpose: "ui-upload" })
+    .setSubject(session.userId)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("5m")

@@ -18,6 +18,7 @@ class Principal:
     kind: str
     project_id: str
     api_key_id: Optional[str] = None
+    user_id: Optional[str] = None
 
 
 def generate_key() -> str:
