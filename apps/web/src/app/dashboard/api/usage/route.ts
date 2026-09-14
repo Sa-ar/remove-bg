@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { neon } from "@neondatabase/serverless";
-import { buildUsageQuery } from "@/lib/usageQuery";
+import { fetchUsage } from "@/lib/usageQuery";
 import { requireUserId } from "@/lib/auth/session";
 import { userOwnsProject } from "@/lib/projects";
 
@@ -19,12 +18,10 @@ export async function GET(req: Request) {
       { status: 404 },
     );
   }
-  const { text, params } = buildUsageQuery({
+  const rows = await fetchUsage({
     projectId,
     days,
     ownerId: session.userId,
   });
-  const client = neon(process.env.DATABASE_URL!);
-  const rows = await client.query(text, params);
   return NextResponse.json(rows);
 }
