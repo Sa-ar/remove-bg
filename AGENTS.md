@@ -18,6 +18,6 @@
 - On Oracle the API runs under systemd (`rembg.service`) behind nginx + Certbot—not Docker; code lives under `/opt/rembg/current`.
 - OCI ephemeral public IPs survive stop/start and are released on terminate; converting to a reserved IP assigns a new address—reserve only if rebuilding, then update DNS.
 - OCI ingress needs both the VCN security list and guest iptables open for 80/443; stock images often allow only SSH (22).
-- GitHub Actions: CI, Vercel UI deploy, HF Space sync, and Oracle API deploy (`deploy-oracle.yml` rsync → restart `rembg`); Oracle needs `ORACLE_HOST`, `ORACLE_USER`, `ORACLE_SSH_KEY` plus shared API/UI secrets. `WEB_ORIGIN` should be `https://www.rembg.site`.
+- GitHub Actions: CI, optional Vercel CLI deploy (`deploy-vercel.yml` skips on push if `VERCEL_TOKEN` is missing/rejected — Git integration is the real UI CD), HF Space sync, and Oracle API deploy (`deploy-oracle.yml` rsync → restart `rembg`); Oracle needs `ORACLE_HOST`, `ORACLE_USER`, `ORACLE_SSH_KEY` plus shared API/UI secrets. `WEB_ORIGIN` should be `https://www.rembg.site`.
 - Neon project `remove-bg` (`restless-forest-85176663`, `aws-eu-central-1`): pooled `DATABASE_URL` on Vercel, direct on Oracle; Auth env (`NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`) on Vercel only.
 - Cold-start / first-inference clients should use ≥120s timeouts; health can report waking while the model loads.
