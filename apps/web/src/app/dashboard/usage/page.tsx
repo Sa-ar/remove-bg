@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
-import { neon } from "@neondatabase/serverless";
 import { auth } from "@/lib/auth/server";
-import { buildUsageQuery } from "@/lib/usageQuery";
+import { fetchUsage } from "@/lib/usageQuery";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -15,15 +14,10 @@ export default async function UsagePage() {
     userId = undefined;
   }
   if (!userId) redirect("/auth/sign-in");
-  const { text, params } = buildUsageQuery({
+  const rows = await fetchUsage({
     days: 30,
     ownerId: userId,
   });
-  const client = neon(process.env.DATABASE_URL!);
-  const rows = (await client.query(text, params)) as {
-    day: string;
-    requests: number;
-  }[];
   const max = Math.max(1, ...rows.map((r) => r.requests));
   return (
     <main className="mx-auto max-w-3xl p-8">
