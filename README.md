@@ -82,7 +82,7 @@ If the website shows **Worker down** while that health call is `200`, it is CORS
 | `ci.yml` | push/PR to `main` | Web lint+build, API compile check |
 | `deploy-oracle.yml` | push `apps/api/**` or manual | rsync + restart systemd on Oracle |
 | `sync-vercel-env.yml` | manual | set API URL + `UI_TOKEN_SECRET`, redeploy UI |
-| `deploy-vercel.yml` | push `apps/web/**` or manual | optional CLI production deploy |
+| `deploy-vercel.yml` | push `apps/web/**` or manual | optional CLI production deploy (skips on push if `VERCEL_TOKEN` is missing or rejected) |
 | `deploy-space.yml` | optional | legacy HF Space sync (skipped without HF secrets) |
 
 **Required Actions secrets for Oracle + Vercel:**
@@ -91,7 +91,7 @@ If the website shows **Worker down** while that health call is `200`, it is CORS
 | --- | --- |
 | `ORACLE_HOST` / `ORACLE_USER` / `ORACLE_SSH_KEY` | Oracle deploy |
 | `API_KEYS` / `UI_TOKEN_SECRET` / `WEB_ORIGIN` | App config (`WEB_ORIGIN` should be `https://www.rembg.site`) |
-| `VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` | Vercel CLI workflows (rotate `VERCEL_TOKEN` if CLI deploys fail) |
+| `VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` | Optional Vercel CLI workflows (rotate `VERCEL_TOKEN` to re-enable CLI deploys) |
 
 Vercel Git integration (root `apps/web`) still deploys the UI on push to `main`. Set `NEON_AUTH_*` and `DATABASE_URL` in the Vercel project.
 

@@ -2,6 +2,8 @@ name: Deploy Web to Vercel
 
 # Primary CD is Vercel Git integration (linked to Sa-ar/remove-bg, root apps/web).
 # This workflow is an optional explicit production deploy via the Vercel CLI.
+# A missing or rejected VERCEL_TOKEN must not fail main: Git integration already
+# deploys production. Rotate the secret to re-enable this CLI path.
 
 on:
   push:
@@ -20,19 +22,37 @@ jobs:
     name: Vercel production
     runs-on: ubuntu-latest
     steps:
-      - name: Require Vercel secrets
+      - name: Require usable Vercel CLI credentials
         id: check
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+          set -euo pipefail
+          if [ -z "${VERCEL_TOKEN}" ] || [ -z "${VERCEL_ORG_ID}" ] || [ -z "${VERCEL_PROJECT_ID}" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "::notice::VERCEL_* secrets not set — Vercel Git integration handles deploys."
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          # Probe without printing the token or response body.
+          http_code="$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            https://api.vercel.com/v2/user || true)"
+
+          if [ "${http_code}" != "200" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            msg="VERCEL_TOKEN is present but Vercel rejected it (HTTP ${http_code}). Git integration remains the production path. Rotate VERCEL_TOKEN in GitHub secrets to re-enable this CLI job."
+            if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+              echo "::error::${msg}"
+              exit 1
+            fi
+            echo "::notice::${msg}"
+            exit 0
+          fi
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
         if: steps.check.outputs.skip == 'false'

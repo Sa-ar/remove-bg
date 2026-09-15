@@ -77,9 +77,9 @@ If sign-in fails: check Vercel `NEON_AUTH_BASE_URL` / `NEON_AUTH_COOKIE_SECRET` 
 | Path | How |
 | --- | --- |
 | API | `.github/workflows/deploy-oracle.yml` on `apps/api/**` → rsync `/opt/rembg/current` (skips `.env`) → pip → restart |
-| UI | Vercel Git integration (root `apps/web`). CLI workflow needs a valid `VERCEL_TOKEN`. |
+| UI | Vercel Git integration (root `apps/web`). Optional CLI workflow skips on push if `VERCEL_TOKEN` is missing or rejected. |
 
-If the GitHub Actions `VERCEL_TOKEN` is invalid, rotate it in GitHub secrets. Do not paste tokens into chat.
+If the GitHub Actions `VERCEL_TOKEN` is invalid, the push job stays green and Git integration still deploys. Rotate the secret to re-enable CLI deploys. Do not paste tokens into chat.
 
 ## Smoke
 
