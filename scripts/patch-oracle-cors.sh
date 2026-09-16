@@ -17,6 +17,7 @@ lines.append("WEB_ORIGIN=https://www.rembg.site")
 lines.append("EXTRA_CORS_ORIGINS=https://rembg.site,https://remove-bg-five-topaz.vercel.app")
 p.write_text("\n".join(lines) + "\n")
 PY
+sudo systemctl unmask rembg.service || true
 sudo systemctl restart rembg.service
 REMOTE
 echo "Restarted rembg. Verify:"

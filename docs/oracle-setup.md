@@ -2,7 +2,7 @@
 
 Live API: **https://api.rembg.site** (ephemeral public IP `84.13.79.22`, `il-jerusalem-1`).
 
-Stack: `rembg.service` (FastAPI in `/opt/rembg/current`, venv `/opt/rembg`) behind nginx + Certbot. Not Docker.
+Stack: `rembg.service` (FastAPI in `/opt/rembg/current`, venv `/opt/rembg`) behind nginx + Certbot. Not Docker. Canonical unit: `apps/api/deploy/rembg.service`.
 
 See also [architecture.md](./architecture.md), [runbook.md](./runbook.md), [auth.md](./auth.md).
 

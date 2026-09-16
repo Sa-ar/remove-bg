@@ -22,10 +22,12 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+# db.DATABASE_URL is read at import time. Load .env before importing app.*
+# so a bare `uvicorn app.main:app` picks up the box env (quota, keys, CORS).
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
 from app import db, keys, quota, usage
 from app.keys import Principal
-
-load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 logger = logging.getLogger("remove_bg")
 logging.basicConfig(level=logging.INFO)

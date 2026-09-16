@@ -55,6 +55,15 @@ jobs:
         run: python -m compileall -q app
       - name: Quota unit tests
         run: python -m pytest tests/test_quota.py -q
+      - name: Oracle deploy helpers
+        run: |
+          bash -n deploy/remote-restart.sh
+          bash -n deploy/ensure-rembg-unit.sh
+          bash deploy/ensure-rembg-unit.sh --self-test
+          test -f deploy/rembg.service
+          grep -q 'ExecStart=/opt/rembg/bin/uvicorn app.main:app --host 127.0.0.1 --port 5000' deploy/rembg.service
+          grep -q 'WorkingDirectory=/opt/rembg/current' deploy/rembg.service
+          grep -q 'User=ubuntu' deploy/rembg.service
 
   uptime-script:
     name: Uptime check script
