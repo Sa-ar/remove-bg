@@ -83,7 +83,7 @@ If the GitHub Actions `VERCEL_TOKEN` is invalid, the push job stays green and Gi
 
 ## Monitoring
 
-`.github/workflows/uptime-api.yml` polls `GET https://api.rembg.site/v1/health` every 15 minutes (and on **Actions → API uptime → Run workflow**). Timeout is 25s. Uses only `GITHUB_TOKEN` (`issues: write`, `contents: read`). No SaaS keys.
+`.github/workflows/uptime-api.yml` polls `GET https://api.rembg.site/v1/health` hourly at :00 UTC (and on **Actions → API uptime → Run workflow**). Timeout is 25s. Uses only `GITHUB_TOKEN` (`issues: write`, `contents: read`). No SaaS keys.
 
 | Probe result | What happens |
 | --- | --- |

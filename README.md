@@ -96,7 +96,7 @@ If the website shows **Worker down** while that health call is `200`, it is CORS
 | `sync-vercel-env.yml` | manual | set API URL + `UI_TOKEN_SECRET`, redeploy UI |
 | `deploy-vercel.yml` | push `apps/web/**` or manual | optional CLI production deploy (skips on push if `VERCEL_TOKEN` is missing or rejected) |
 | `deploy-space.yml` | optional | legacy HF Space sync (skipped without HF secrets) |
-| `uptime-api.yml` | every 15 min or manual | `GET /v1/health`; one reused `uptime` GitHub Issue on hard / stuck-waking failure |
+| `uptime-api.yml` | hourly or manual | `GET /v1/health`; one reused `uptime` GitHub Issue on hard / stuck-waking failure |
 
 **Required Actions secrets for Oracle + Vercel:**
 
