@@ -55,3 +55,13 @@ jobs:
         run: python -m compileall -q app
       - name: Quota unit tests
         run: python -m pytest tests/test_quota.py -q
+
+  uptime-script:
+    name: Uptime check script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Self-test classifier
+        run: |
+          chmod +x scripts/check-api-uptime.sh
+          scripts/check-api-uptime.sh --self-test

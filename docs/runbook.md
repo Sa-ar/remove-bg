@@ -81,6 +81,36 @@ If sign-in fails: check Vercel `NEON_AUTH_BASE_URL` / `NEON_AUTH_COOKIE_SECRET` 
 
 If the GitHub Actions `VERCEL_TOKEN` is invalid, the push job stays green and Git integration still deploys. Rotate the secret to re-enable CLI deploys. Do not paste tokens into chat.
 
+## Monitoring
+
+`.github/workflows/uptime-api.yml` polls `GET https://api.rembg.site/v1/health` hourly at :00 UTC (and on **Actions → API uptime → Run workflow**). Timeout is 25s. Uses only `GITHUB_TOKEN` (`issues: write`, `contents: read`). No SaaS keys.
+
+| Probe result | What happens |
+| --- | --- |
+| HTTP `200` and JSON `status=ok` | Healthy. If an open `uptime` issue exists, it is commented and closed. |
+| HTTP `503` and JSON `code=waking` | Soft / recoverable (model still loading). No issue on the first two consecutive waking checks. A third waking in a row is treated as stuck and alerts. |
+| Timeout, connection error, non-200, `503` that is not `waking` (including `model_error`), or unexpected body | Hard failure — alert immediately. |
+
+**Alert:** one open GitHub Issue, title `API uptime: api.rembg.site unhealthy`, label `uptime`. Later failures **edit that same issue** (no comment spam). The job also fails so the Actions run is red.
+
+**Recovery:** the next healthy check comments `Recovered at <UTC>…` and closes the issue (`completed`).
+
+Consecutive waking counts live in the Actions cache (`.uptime-state`). A cache miss starts the streak at 1 (no false page). An already-open uptime issue is still updated if the API is not `ok`.
+
+### Manual run
+
+1. Repo **Actions** → **API uptime** → **Run workflow**.
+2. `workflow_dispatch` is available only after this workflow exists on the default branch (`main`).
+3. If the workflow is missing from the Actions list: enable Actions under **Settings → Actions → General**. Schedules do not run from a PR branch.
+4. GitHub may delay cron a few minutes. Schedules pause after ~60 days of repository inactivity until the next push.
+
+### Silence / disable
+
+- **Silence alerts:** Actions → **API uptime** → ⋯ → **Disable workflow**. Re-enable the same way. Closing the issue does **not** stop the next hard failure from opening a new one.
+- **Mute mail:** watch the repo for Issues only (or unsubscribe from the `uptime` issue) if you do not want every red scheduled run.
+
+This monitor does **not** check CORS. A `200` health with a missing `Access-Control-Allow-Origin` still looks like **Worker down** in the browser — see above.
+
 ## Smoke
 
 1. Sign in at https://www.rembg.site → badge **Worker ready** (no CORS errors in the console).
