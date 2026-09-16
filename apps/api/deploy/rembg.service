@@ -1,0 +1,18 @@
+[Unit]
+Description=rembg FastAPI background removal API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/rembg/current
+Environment=U2NET_HOME=/opt/rembg/models
+ExecStart=/opt/rembg/current/deploy/run-api.sh
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

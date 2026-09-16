@@ -37,7 +37,9 @@ Read from `/opt/rembg/current/.env` (not overwritten by deploys):
 ```
 
 CI: `.github/workflows/deploy-oracle.yml` on pushes to `apps/api/**`
-(secrets: `ORACLE_HOST`, `ORACLE_USER`, `ORACLE_SSH_KEY`).
+(secrets: `ORACLE_HOST`, `ORACLE_USER`, `ORACLE_SSH_KEY`). The workflow
+unmasks `rembg.service` if needed and installs `deploy/rembg.service` when
+the unit fragment is missing.
 
 ## Local
 

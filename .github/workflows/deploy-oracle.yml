@@ -1,7 +1,8 @@
 name: Deploy API to Oracle
 
-# Syncs apps/api → /opt/rembg/current on the Always Free VM, then restarts
-# rembg.service (uvicorn behind nginx). Does not touch /opt/rembg/current/.env.
+# Syncs apps/api → /opt/rembg/current on the Always Free VM, then runs
+# deploy/remote-restart.sh (pip, model warm, unmask/restore rembg.service,
+# restart, health). Does not touch /opt/rembg/current/.env.
 
 on:
   push:
@@ -76,26 +77,7 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         run: |
           set -euo pipefail
-          ssh rembg-oracle 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          /opt/rembg/bin/pip install --no-input -q -r /opt/rembg/current/requirements.txt
-          MODEL="$(grep -E '^MODEL=' /opt/rembg/current/.env | cut -d= -f2- || true)"
-          MODEL="${MODEL:-isnet-general-use}"
-          U2NET_HOME=/opt/rembg/models /opt/rembg/bin/python -c "from rembg import new_session; new_session(\"${MODEL}\")"
-          sudo systemctl restart rembg.service
-          for i in $(seq 1 40); do
-            if curl -fsS http://127.0.0.1:5000/v1/health >/dev/null 2>&1; then
-              echo "healthy after ${i} attempts"
-              curl -fsS http://127.0.0.1:5000/v1/health
-              echo
-              exit 0
-            fi
-            sleep 3
-          done
-          echo "health check timed out"
-          sudo journalctl -u rembg.service -n 40 --no-pager
-          exit 1
-          REMOTE
+          ssh rembg-oracle bash /opt/rembg/current/deploy/remote-restart.sh
 
       - name: Public smoke check
         if: steps.check.outputs.skip == 'false'
