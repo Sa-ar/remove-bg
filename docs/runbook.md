@@ -57,6 +57,21 @@ sudo journalctl -u rembg.service -n 80 --no-pager
 curl -fsS http://127.0.0.1:5000/v1/health
 ```
 
+If deploy fails with `Unit rembg.service is masked`, the unit was masked on the box
+(`systemctl mask`). Masking replaces `/etc/systemd/system/rembg.service` with a
+symlink to `/dev/null` and blocks `restart` even while an old uvicorn may still
+answer `/v1/health`. `deploy-oracle.yml` unmasks, restores the in-repo unit from
+`apps/api/deploy/rembg.service` if the fragment is gone, then restarts.
+
+Manual recovery:
+
+```bash
+sudo systemctl unmask rembg.service
+sudo install -m 644 /opt/rembg/current/deploy/rembg.service /etc/systemd/system/rembg.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now rembg.service
+```
+
 Port 80/443 must be open in **both** the VCN security list and guest iptables.
 
 ### 4. DNS / IP

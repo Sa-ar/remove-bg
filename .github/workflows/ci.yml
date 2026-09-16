@@ -55,6 +55,12 @@ jobs:
         run: python -m compileall -q app
       - name: Quota unit tests
         run: python -m pytest tests/test_quota.py -q
+      - name: Syntax-check Oracle deploy helpers
+        run: |
+          bash -n deploy/remote-restart.sh
+          bash -n deploy/run-api.sh
+          test -f deploy/rembg.service
+          grep -q 'ExecStart=/opt/rembg/current/deploy/run-api.sh' deploy/rembg.service
 
   uptime-script:
     name: Uptime check script

@@ -47,7 +47,7 @@ GitHub secret `WEB_ORIGIN` should match `https://www.rembg.site`.
 
 | Workflow | When | What |
 | --- | --- | --- |
-| `deploy-oracle.yml` | push `apps/api/**` or manual | rsync → `/opt/rembg/current`, pip, restart `rembg`, health check |
+| `deploy-oracle.yml` | push `apps/api/**` or manual | rsync → `/opt/rembg/current`, pip, unmask/restore `rembg.service` if needed, restart, health check |
 | `sync-vercel-env.yml` | manual | set `NEXT_PUBLIC_API_URL` + `UI_TOKEN_SECRET`, prod redeploy |
 | `deploy-vercel.yml` | push `apps/web/**` or manual | optional CLI prod deploy (skips on push if token missing/rejected) |
 | `ci.yml` | push/PR | lint/build/compile |
