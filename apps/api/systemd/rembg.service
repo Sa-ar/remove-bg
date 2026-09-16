@@ -1,0 +1,19 @@
+[Unit]
+Description=rembg FastAPI background removal worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/rembg/current
+EnvironmentFile=-/opt/rembg/current/.env
+Environment=U2NET_HOME=/opt/rembg/models
+ExecStart=/opt/rembg/bin/uvicorn app.main:app --host 127.0.0.1 --port 5000
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

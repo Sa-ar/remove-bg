@@ -57,6 +57,16 @@ sudo journalctl -u rembg.service -n 80 --no-pager
 curl -fsS http://127.0.0.1:5000/v1/health
 ```
 
+If deploy fails with `Unit rembg.service is masked`, the unit cannot be restarted until it is unmasked. CI now unmasks and, if the unit file was lost (mask replaces `/etc/systemd/system/rembg.service` with `/dev/null`), restores `apps/api/systemd/rembg.service`. Manual recovery:
+
+```bash
+sudo systemctl unmask rembg.service
+# only if `systemctl cat rembg.service` still fails:
+sudo install -m 644 /opt/rembg/current/systemd/rembg.service /etc/systemd/system/rembg.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now rembg.service
+```
+
 Port 80/443 must be open in **both** the VCN security list and guest iptables.
 
 ### 4. DNS / IP
