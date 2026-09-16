@@ -48,10 +48,14 @@ if unit_is_masked; then
 fi
 
 if ! unit_has_real_fragment; then
-  echo "installing ${UNIT} from ${UNIT_SRC}"
+  echo "installing ${UNIT} from ${UNIT_SRC} as $(id -un):$(id -gn)"
   test -f "$UNIT_SRC"
   test -x /opt/rembg/current/deploy/run-api.sh
-  sudo install -m 644 "$UNIT_SRC" "$UNIT_DST"
+  tmp="$(mktemp)"
+  sed -e "s/^User=ubuntu$/User=$(id -un)/" -e "s/^Group=ubuntu$/Group=$(id -gn)/" \
+    "$UNIT_SRC" > "$tmp"
+  sudo install -m 644 "$tmp" "$UNIT_DST"
+  rm -f "$tmp"
   sudo systemctl daemon-reload
   sudo systemctl enable "$UNIT"
 else
