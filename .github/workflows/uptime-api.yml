@@ -1,0 +1,183 @@
+name: API uptime
+
+# Free monitor for https://api.rembg.site — no extra secrets.
+# Soft 503 code=waking is ignored for 1–2 consecutive runs; a third waking
+# (or any timeout / unexpected response) opens or updates one `uptime` issue.
+# The next 200 + status=ok check comments and closes that issue.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: uptime-api
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: Health check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore consecutive-check state
+        uses: actions/cache/restore@v4
+        with:
+          path: .uptime-state
+          key: uptime-state-${{ github.run_id }}
+          restore-keys: |
+            uptime-state-
+
+      - name: Check /v1/health
+        id: check
+        run: |
+          set -euo pipefail
+          chmod +x scripts/check-api-uptime.sh
+          scripts/check-api-uptime.sh \
+            --url "https://api.rembg.site/v1/health" \
+            --state .uptime-state \
+            --waking-limit 3
+
+      - name: Save consecutive-check state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .uptime-state
+          key: uptime-state-${{ github.run_id }}
+
+      - name: Write job summary
+        if: always() && steps.check.outcome == 'success'
+        env:
+          SUMMARY: ${{ steps.check.outputs.summary }}
+          BODY_SNIPPET: ${{ steps.check.outputs.body_snippet }}
+          ALERT: ${{ steps.check.outputs.alert }}
+          RECOVERED: ${{ steps.check.outputs.recovered }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## API uptime"
+            echo
+            echo "${SUMMARY}"
+            echo
+            echo "- alert: \`${ALERT}\`"
+            echo "- recovered: \`${RECOVERED}\`"
+            if [ -n "${BODY_SNIPPET}" ]; then
+              echo
+              echo '```'
+              printf '%s\n' "${BODY_SNIPPET}"
+              echo '```'
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: File or update uptime issue
+        if: always() && (steps.check.outcome != 'success' || steps.check.outputs.result != 'ok')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RESULT: ${{ steps.check.outputs.result }}
+          ALERT: ${{ steps.check.outputs.alert }}
+          HTTP_CODE: ${{ steps.check.outputs.http_code }}
+          CURL_EXIT: ${{ steps.check.outputs.curl_exit }}
+          WAKING_STREAK: ${{ steps.check.outputs.waking_streak }}
+          WAKING_LIMIT: ${{ steps.check.outputs.waking_limit }}
+          CHECKED_UTC: ${{ steps.check.outputs.checked_utc }}
+          BODY_SNIPPET: ${{ steps.check.outputs.body_snippet }}
+          URL: ${{ steps.check.outputs.url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          TITLE="API uptime: api.rembg.site unhealthy"
+          if [ -z "${RESULT}" ]; then
+            RESULT="hard_fail"
+            ALERT="1"
+            HTTP_CODE="${HTTP_CODE:-000}"
+            CURL_EXIT="${CURL_EXIT:-1}"
+            WAKING_STREAK="${WAKING_STREAK:-0}"
+            WAKING_LIMIT="${WAKING_LIMIT:-3}"
+            CHECKED_UTC="${CHECKED_UTC:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}"
+            URL="${URL:-https://api.rembg.site/v1/health}"
+            BODY_SNIPPET="${BODY_SNIPPET:-uptime check step failed before classifying /v1/health}"
+          fi
+          gh label create uptime --description "Production API uptime alerts" --color B60205 2>/dev/null || true
+
+          existing="$(
+            gh issue list --label uptime --state open --limit 20 --json number,title \
+              --jq "[.[] | select(.title == \"${TITLE}\")] | first | .number // empty"
+          )"
+
+          if [ "${ALERT}" != "1" ] && [ -z "${existing}" ]; then
+            echo "Soft waking (streak ${WAKING_STREAK}/${WAKING_LIMIT}); no issue yet."
+            exit 0
+          fi
+
+          issue_md="$(mktemp)"
+          {
+            echo "Production API health check failed."
+            echo
+            echo "- **Checked:** \`GET ${URL}\`"
+            echo "- **When:** ${CHECKED_UTC}"
+            echo "- **HTTP:** ${HTTP_CODE} (curl exit ${CURL_EXIT})"
+            echo "- **Result:** \`${RESULT}\`"
+            echo "- **Waking streak:** ${WAKING_STREAK}/${WAKING_LIMIT} (alert after ${WAKING_LIMIT} consecutive waking checks)"
+            echo "- **Workflow run:** ${RUN_URL}"
+            echo
+            echo "Body snippet:"
+            echo
+            echo '```'
+            printf '%s\n' "${BODY_SNIPPET:-<empty>}"
+            echo '```'
+            echo
+            echo "This issue is reused by \`.github/workflows/uptime-api.yml\`. It is closed automatically on the next \`200\` + \`status=ok\` check."
+          } > "${issue_md}"
+
+          if [ -n "${existing}" ]; then
+            gh issue edit "${existing}" --body-file "${issue_md}"
+            echo "Updated open uptime issue #${existing}."
+          else
+            gh issue create --title "${TITLE}" --label uptime --body-file "${issue_md}"
+            echo "Opened uptime issue."
+          fi
+
+          # Fail the job once the check is a hard failure or persistent waking.
+          # A single 503 code=waking (no open issue) already exited 0 above.
+          exit 1
+
+      - name: Close uptime issue on recovery
+        if: steps.check.outputs.result == 'ok'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHECKED_UTC: ${{ steps.check.outputs.checked_utc }}
+          HTTP_CODE: ${{ steps.check.outputs.http_code }}
+          BODY_SNIPPET: ${{ steps.check.outputs.body_snippet }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          TITLE="API uptime: api.rembg.site unhealthy"
+          existing="$(
+            gh issue list --label uptime --state open --limit 20 --json number,title \
+              --jq "[.[] | select(.title == \"${TITLE}\")] | first | .number // empty"
+          )"
+          if [ -z "${existing}" ]; then
+            echo "No open uptime issue."
+            exit 0
+          fi
+          comment="$(mktemp)"
+          {
+            echo "Recovered at ${CHECKED_UTC}. \`GET /v1/health\` returned HTTP ${HTTP_CODE} with \`status=ok\`."
+            echo
+            echo "- **Workflow run:** ${RUN_URL}"
+            if [ -n "${BODY_SNIPPET}" ]; then
+              echo
+              echo '```'
+              printf '%s\n' "${BODY_SNIPPET}"
+              echo '```'
+            fi
+          } > "${comment}"
+          gh issue comment "${existing}" --body-file "${comment}"
+          gh issue close "${existing}" --reason completed
+          echo "Closed uptime issue #${existing}."

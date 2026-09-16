@@ -51,6 +51,7 @@ GitHub secret `WEB_ORIGIN` should match `https://www.rembg.site`.
 | `sync-vercel-env.yml` | manual | set `NEXT_PUBLIC_API_URL` + `UI_TOKEN_SECRET`, prod redeploy |
 | `deploy-vercel.yml` | push `apps/web/**` or manual | optional CLI prod deploy (skips on push if token missing/rejected) |
 | `ci.yml` | push/PR | lint/build/compile |
+| `uptime-api.yml` | every 15 min or manual | public `/v1/health`; one `uptime` issue if down or stuck waking |
 
 **Actions secrets:** `ORACLE_HOST`, `ORACLE_USER`, `ORACLE_SSH_KEY`, `API_KEYS`, `UI_TOKEN_SECRET`, `WEB_ORIGIN`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
 

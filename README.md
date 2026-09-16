@@ -85,17 +85,18 @@ If the website shows **Worker down** while that health call is `200`, it is CORS
 ## Production
 
 - UI: https://www.rembg.site
-- API: https://api.rembg.site — [docs/oracle-setup.md](docs/oracle-setup.md)
+- API: https://api.rembg.site — [docs/oracle-setup.md](docs/oracle-setup.md). Free uptime checks + GitHub Issue alerts: [docs/runbook.md#monitoring](docs/runbook.md#monitoring).
 
 ### CI/CD (GitHub Actions)
 
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
-| `ci.yml` | push/PR to `main` | Web lint+build, API compile + quota tests |
+| `ci.yml` | push/PR to `main` | Web lint+build, API compile + quota tests, uptime script self-test |
 | `deploy-oracle.yml` | push `apps/api/**` or manual | rsync + restart systemd on Oracle |
 | `sync-vercel-env.yml` | manual | set API URL + `UI_TOKEN_SECRET`, redeploy UI |
 | `deploy-vercel.yml` | push `apps/web/**` or manual | optional CLI production deploy (skips on push if `VERCEL_TOKEN` is missing or rejected) |
 | `deploy-space.yml` | optional | legacy HF Space sync (skipped without HF secrets) |
+| `uptime-api.yml` | every 15 min or manual | `GET /v1/health`; one reused `uptime` GitHub Issue on hard / stuck-waking failure |
 
 **Required Actions secrets for Oracle + Vercel:**
 
