@@ -22,7 +22,7 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app import db, keys, usage
+from app import db, keys, quota, usage
 from app.keys import Principal
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -170,10 +170,17 @@ app.add_middleware(
 )
 
 
-def error_response(status: int, error: str, code: str, hint: str) -> JSONResponse:
+def error_response(
+    status: int,
+    error: str,
+    code: str,
+    hint: str,
+    headers: Optional[dict[str, str]] = None,
+) -> JSONResponse:
     return JSONResponse(
         status_code=status,
         content=ErrorBody(error=error, code=code, hint=hint).model_dump(),
+        headers=headers,
     )
 
 
@@ -346,6 +353,18 @@ async def remove_bg(
             f"Max size is {MAX_BYTES // (1024 * 1024)}MB.",
         )
 
+    # After auth, before the inference lock: count today's usage_events for
+    # this project. Fail-open if the DB cannot be read.
+    quota_check = await quota.check_daily_quota(principal.project_id)
+    if not quota_check.allowed:
+        return error_response(
+            429,
+            "Daily project quota exceeded",
+            "quota_exceeded",
+            quota.exceeded_hint(quota_check),
+            headers=quota.quota_headers(quota_check),
+        )
+
     _t0 = time.monotonic()
     try:
         await asyncio.wait_for(inference_lock.acquire(), timeout=90.0)
@@ -380,13 +399,16 @@ async def remove_bg(
         status=200,
     )
 
+    response_headers = {
+        "Content-Disposition": 'inline; filename="removed.png"',
+        "Cache-Control": "no-store",
+    }
+    if quota_check.checked:
+        response_headers.update(quota.quota_headers(quota_check))
     return Response(
         content=png,
         media_type="image/png",
-        headers={
-            "Content-Disposition": 'inline; filename="removed.png"',
-            "Cache-Control": "no-store",
-        },
+        headers=response_headers,
     )
 
 

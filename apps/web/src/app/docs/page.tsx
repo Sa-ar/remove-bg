@@ -88,6 +88,39 @@ const png = await res.blob(); // image/png with alpha`;
       </section>
 
       <section className="mt-10 space-y-3">
+        <h2 className="text-xl font-medium">Limits</h2>
+        <ul className="list-disc space-y-1 pl-5 text-sm text-muted">
+          <li>
+            30 requests per minute per API key or IP — HTTP{" "}
+            <code className="text-foreground">429</code>{" "}
+            <code className="text-foreground">code=rate_limited</code>
+          </li>
+          <li>
+            One in-flight inference — HTTP{" "}
+            <code className="text-foreground">429</code>{" "}
+            <code className="text-foreground">code=busy</code>
+          </li>
+          <li>
+            <strong className="text-foreground">50 removals per project
+            per UTC day</strong> (override with API env{" "}
+            <code className="text-foreground">DAILY_QUOTA_PER_PROJECT</code>) —
+            HTTP <code className="text-foreground">429</code>{" "}
+            <code className="text-foreground">code=quota_exceeded</code>.
+            Hint names the limit and that usage resets at the next UTC midnight.
+          </li>
+        </ul>
+        <p className="text-sm text-muted">
+          The daily cap is counted from today&apos;s{" "}
+          <code className="text-foreground">usage_events</code> for the
+          authenticated project (dashboard keys, signed-in website{" "}
+          <code className="text-foreground">web-ui</code> traffic, and{" "}
+          <code className="text-foreground">legacy</code> keys). If the
+          database is unavailable so the count cannot be read, the API fails
+          open and still runs inference.
+        </p>
+      </section>
+
+      <section className="mt-10 space-y-3">
         <h2 className="text-xl font-medium">Restarts and first inference</h2>
         <p className="text-sm text-muted">
           The Oracle VM stays on. After a service restart the model loads into

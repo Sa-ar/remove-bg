@@ -23,7 +23,7 @@ Neon Postgres (project remove-bg, aws-eu-central-1)
   neon_auth.*          users / sessions (Managed Better Auth)
   projects             owner_id = Neon user id (dashboard)
   api_keys             hashed project keys
-  usage_events         per-removal log (best-effort)
+  usage_events         per-removal log (best-effort; also the daily quota source)
 ```
 
 ## Pieces
@@ -53,6 +53,12 @@ The API allow-list is `WEB_ORIGIN` + `EXTRA_CORS_ORIGINS` + hardcoded production
 
 See [runbook.md](./runbook.md) and [oracle-setup.md](./oracle-setup.md).
 
+## Quotas
+
+`POST /v1/remove` enforces a daily cap per project (default 50, UTC day, env `DAILY_QUOTA_PER_PROJECT`) after auth and before the inference lock. The count is `usage_events` for that `project_id` since the current UTC midnight. If the DB cannot be read, the request is allowed (fail-open). Health is not quota-gated. The 30/minute limiter and busy lock are unchanged.
+
+See [quotas.md](./quotas.md).
+
 ## Out of scope
 
-Billing, quotas, image storage, Clerk, Docker-on-Oracle, terminating the VM, RMBG-2.0, GPU hosts, SDKs.
+Billing, image storage, Clerk, Docker-on-Oracle, terminating the VM, RMBG-2.0, GPU hosts, SDKs.

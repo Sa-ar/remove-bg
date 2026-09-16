@@ -10,7 +10,7 @@ High-quality background removal with a web UI and an HTTP API other projects can
 
 Uploads go **directly to the API** (not through Vercel) so 10MB+ photos work on the Hobby body limit. The tool and dashboard require sign-in. `/docs` is public.
 
-See [docs/architecture.md](docs/architecture.md), [docs/auth.md](docs/auth.md), [docs/runbook.md](docs/runbook.md).
+See [docs/architecture.md](docs/architecture.md), [docs/auth.md](docs/auth.md), [docs/quotas.md](docs/quotas.md), [docs/runbook.md](docs/runbook.md).
 
 ## Local development
 
@@ -66,6 +66,18 @@ curl -X POST "http://localhost:8000/v1/remove" \
 - Errors: `{ "error", "code", "hint" }`
 - OpenAPI: `/docs`
 
+### Limits (free tier)
+
+| Limit | Default | When exceeded |
+| --- | --- | --- |
+| Per key/IP | 30 requests / minute | HTTP 429 `code=rate_limited` |
+| In-flight inference | 1 at a time | HTTP 429 `code=busy` |
+| Per project | **50 removals / UTC day** | HTTP 429 `code=quota_exceeded` |
+
+The daily cap is counted from `usage_events` for the authenticated project (dashboard keys, signed-in website traffic on the reserved `web-ui` project, and `legacy` env keys). Override with API env `DAILY_QUOTA_PER_PROJECT`. If the database is down so today's count cannot be read, the API **fails open** (allows the request) and logs a warning — inference never depends on the DB. See [docs/quotas.md](docs/quotas.md).
+
+The 429 body is `{ "error", "code", "hint" }`. For `quota_exceeded`, `hint` includes the limit and that usage resets at the next UTC midnight.
+
 **First inference after restart:** The Oracle VM stays on. After a service restart the model loads into RAM; `GET /v1/health` returns `503` with `code=waking` until ready. Client timeout ≥ 120s. Warm CPU inference is typically a few seconds (`isnet-general-use`).
 
 If the website shows **Worker down** while that health call is `200`, it is CORS — see [docs/runbook.md](docs/runbook.md).
@@ -79,7 +91,7 @@ If the website shows **Worker down** while that health call is `200`, it is CORS
 
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
-| `ci.yml` | push/PR to `main` | Web lint+build, API compile check |
+| `ci.yml` | push/PR to `main` | Web lint+build, API compile + quota tests |
 | `deploy-oracle.yml` | push `apps/api/**` or manual | rsync + restart systemd on Oracle |
 | `sync-vercel-env.yml` | manual | set API URL + `UI_TOKEN_SECRET`, redeploy UI |
 | `deploy-vercel.yml` | push `apps/web/**` or manual | optional CLI production deploy (skips on push if `VERCEL_TOKEN` is missing or rejected) |
@@ -102,7 +114,7 @@ Vercel Git integration (root `apps/web`) still deploys the UI on push to `main`.
 
 ## Out of scope (this iteration)
 
-No billing, quotas, image storage, batch/video, background replacement, RMBG-2.0 (CC BY-NC), `birefnet-massive` on free hardware, GPU hosts, Clerk, Docker-on-Oracle, or SDKs.
+No billing, image storage, batch/video, background replacement, RMBG-2.0 (CC BY-NC), `birefnet-massive` on free hardware, GPU hosts, Clerk, Docker-on-Oracle, or SDKs. Daily per-project quotas are free-tier abuse control, not billing.
 
 ## License
 

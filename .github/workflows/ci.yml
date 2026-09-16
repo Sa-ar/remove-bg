@@ -49,7 +49,9 @@ jobs:
           cache-dependency-path: apps/api/requirements.txt
       - name: Install lightweight deps for import check
         run: |
-          pip install fastapi uvicorn python-multipart python-dotenv PyJWT slowapi pydantic-settings pillow
+          pip install fastapi uvicorn python-multipart python-dotenv PyJWT slowapi pydantic-settings pillow asyncpg pytest pytest-asyncio
           # rembg/onnxruntime are heavy; syntax-check the app module without loading the model
       - name: Compile API sources
         run: python -m compileall -q app
+      - name: Quota unit tests
+        run: python -m pytest tests/test_quota.py -q
