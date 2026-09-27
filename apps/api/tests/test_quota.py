@@ -131,6 +131,16 @@ def test_health_handler_does_not_call_quota():
     assert "quota" not in text[start:end]
 
 
+def test_health_handler_does_not_touch_db():
+    text = MAIN_PY.read_text()
+    start = text.index("async def health")
+    end = text.index("def _guess_allowed")
+    body = text[start:end]
+    assert "db." not in body
+    assert "get_pool" not in body
+    assert "DATABASE" not in body
+
+
 def test_remove_checks_quota_after_auth_before_lock():
     text = MAIN_PY.read_text()
     start = text.index("async def remove_bg")

@@ -54,7 +54,7 @@ jobs:
       - name: Compile API sources
         run: python -m compileall -q app
       - name: Quota unit tests
-        run: python -m pytest tests/test_quota.py -q
+        run: python -m pytest tests/test_quota.py tests/test_db_module.py -q
       - name: Syntax-check Oracle deploy helpers
         run: |
           bash -n deploy/remote-restart.sh
