@@ -18,3 +18,15 @@ Use the **pooled** connection string for Vercel (`apps/web`) and the **direct**
 string for the Oracle API (`asyncpg`). `DATABASE_URL` lives in Vercel env and
 `/opt/rembg/current/.env` — never commit it.
 
+## Oracle must not pin Neon awake
+
+`rembg.service` is always-on (`Restart=always`). The API pool must use
+`min_size=0` and a short `max_inactive_connection_lifetime` so it does not
+hold a warm idle Postgres connection. `GET /v1/health` stays DB-free (uptime
+probes must not wake compute).
+
+Neon still needs scale-to-zero enabled on the endpoint (`suspend_timeout_seconds`
+> 0; default is 300). `suspend_timeout_seconds: 0` keeps compute running even
+after the pool drops to zero. Vercel already uses `@neondatabase/serverless`
+and does not hold connections.
+
